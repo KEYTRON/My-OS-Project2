@@ -1,2 +1,2 @@
-# My-OS-Project2
+# My OS Project
  
