@@ -49,6 +49,8 @@ read_sectors:
 
 disk_error:
     ; Обработка ошибки (например, можно вывести сообщение)
+    mov si, error_msg
+    call print_string
     hlt                   ; Остановка системы
 
 [bits 32]
@@ -65,6 +67,19 @@ protected_mode:
 
 hang:
     jmp hang              ; Ожидание
+
+print_string:
+    mov ah, 0x0E
+.next_char:
+    lodsb
+    cmp al, 0
+    je .done
+    int 0x10
+    jmp .next_char
+.done:
+    ret
+
+error_msg db "Disk read error!", 0
 
 times 510-($-$$) db 0     ; Дополняем до 512 байт
 dw 0xAA55                 ; Сигнатура загрузочного сектора

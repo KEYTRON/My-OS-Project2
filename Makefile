@@ -1,5 +1,11 @@
 # Makefile
 
+BOOT_DIR := boot
+KERNEL_DIR := kernel
+BUILD_DIR := build
+
+$(shell mkdir -p $(BUILD_DIR))
+
 # Путь к компилятору
 CC = i386-elf-gcc
 LD = i386-elf-ld
@@ -10,20 +16,21 @@ LDFLAGS = -T kernel/kernel.ld
 all: os-image
 
 # Компиляция загрузчика
-boot/boot.bin: boot/boot.asm
+$(BOOT_DIR)/boot.bin: $(BOOT_DIR)/boot.asm
 	$(ASM) -f bin $< -o $@
 
-# Компиляция ядра
-kernel/kernel.bin: kernel/kernel.c
+$(BUILD_DIR)/kernel.o: $(KERNEL_DIR)/kernel.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Компоновка ядра
-kernel/kernel.elf: kernel/kernel.bin
+$(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/kernel.o
 	$(LD) $(LDFLAGS) -o $@ $<
 
 # Создание образа ОС
-os-image: boot/boot.bin kernel/kernel.elf
+os-image: $(BOOT_DIR)/boot.bin $(BUILD_DIR)/kernel.elf
 	cat $^ > os-image.bin
 
+run: os-image
+	qemu-system-i386 -drive format=raw,file=os-image.bin
+
 clean:
-	rm -f boot/*.bin kernel/*.bin kernel/*.elf os-image.bin
+	rm -f $(BOOT_DIR)/*.bin $(BUILD_DIR)/* os-image.bin
