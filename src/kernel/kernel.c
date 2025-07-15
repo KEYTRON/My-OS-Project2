@@ -5,6 +5,7 @@
 #include "fs.h"
 #include "shell.h"
 #include "task.h"
+#include "ata.h"
 
 static void demo_task1() {
     print_string("Task1 running\n");
@@ -19,6 +20,7 @@ void kernel_main(void) {
     init_interrupts();
     init_paging();
     fs_init();
+    ata_init();
     print_string("Welcome to MyOS!\n");
     print_string("Kernel initialized.\n");
     init_keyboard();
@@ -30,6 +32,21 @@ void kernel_main(void) {
     for (int i = 0; i < 5; i++) {
         task_run_once();
     }
+
+    unsigned char sector[512];
+    ata_read_sector(0, sector);
+    print_string("First bytes of disk: \n");
+    for (int i = 0; i < 16; i++) {
+        char c = sector[i];
+        char out[3] = {
+            "0123456789ABCDEF"[(c>>4)&0xF],
+            "0123456789ABCDEF"[c&0xF],
+            '\0'
+        };
+        print_string(out);
+        put_char(' ');
+    }
+    print_string("\n");
 
     print_string("Starting shell...\n");
     shell();

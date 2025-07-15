@@ -40,6 +40,9 @@ $(BUILD_DIR)/paging.o: $(KERNEL_DIR)/paging.c
 $(BUILD_DIR)/fs.o: $(KERNEL_DIR)/fs.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/ata.o: $(KERNEL_DIR)/ata.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/shell.o: $(KERNEL_DIR)/shell.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -51,7 +54,7 @@ $(BUILD_DIR)/isr.o: $(KERNEL_DIR)/isr.S
 
 OBJS := $(BUILD_DIR)/kernel.o $(BUILD_DIR)/vga.o \
 $(BUILD_DIR)/memory.o $(BUILD_DIR)/interrupts.o \
-$(BUILD_DIR)/keyboard.o $(BUILD_DIR)/paging.o $(BUILD_DIR)/fs.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/task.o $(BUILD_DIR)/isr.o
+$(BUILD_DIR)/keyboard.o $(BUILD_DIR)/paging.o $(BUILD_DIR)/fs.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/task.o $(BUILD_DIR)/ata.o $(BUILD_DIR)/isr.o
 
 $(BUILD_DIR)/kernel.elf: $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
