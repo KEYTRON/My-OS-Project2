@@ -21,6 +21,7 @@ void kernel_main(void) {
     init_paging();
     fs_init();
     ata_init();
+    
     print_string("Welcome to MyOS!\n");
     print_string("Kernel initialized.\n");
     init_keyboard();
@@ -29,6 +30,7 @@ void kernel_main(void) {
     task_create(demo_task1);
     task_create(demo_task2);
     print_string("Starting simple multitasking demo...\n");
+    
     for (int i = 0; i < 5; i++) {
         task_run_once();
     }
@@ -39,8 +41,8 @@ void kernel_main(void) {
     for (int i = 0; i < 16; i++) {
         char c = sector[i];
         char out[3] = {
-            "0123456789ABCDEF"[(c>>4)&0xF],
-            "0123456789ABCDEF"[c&0xF],
+            "0123456789ABCDEF"[(c >> 4) & 0xF],
+            "0123456789ABCDEF"[c & 0xF],
             '\0'
         };
         print_string(out);
@@ -50,5 +52,6 @@ void kernel_main(void) {
 
     print_string("Starting shell...\n");
     shell();
+
     while (1) {}
 }
