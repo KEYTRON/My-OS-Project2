@@ -1,7 +1,4 @@
-
-
 #include "interrupts.h"
-
 // Структура записи IDT
 struct IDTEntry {
     unsigned short offset_low;
@@ -30,3 +27,4 @@ void init_interrupts() {
     // Запишем таблицу IDT в процессор
     load_idt((unsigned int)&idt_ptr);
 }
+
