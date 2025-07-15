@@ -1,5 +1,7 @@
 # Makefile
 
+=======
+# Пути
 BOOT_DIR := src/bootloader
 KERNEL_DIR := src/kernel
 BUILD_DIR := build
@@ -12,14 +14,46 @@ LD = ld
 ASM = nasm
 CFLAGS = -m32 -ffreestanding -O2 -nostdlib
 LDFLAGS = -m elf_i386 -T $(KERNEL_DIR)/kernel.ld
+=======
+# Компиляторы и флаги
+CC := i686-linux-gnu-gcc
+LD := i686-linux-gnu-ld
+ASM := nasm
+CFLAGS := -m32 -ffreestanding -O2 -nostdlib
+LDFLAGS := -T $(KERNEL_DIR)/kernel.ld
 
-all: os-image
+# Создание каталога сборки
+$(shell mkdir -p $(BUILD_DIR))
 
-# Компиляция загрузчика
-$(BOOT_DIR)/boot.bin: $(BOOT_DIR)/boot.asm
+# Файлы
+BOOT_BIN := $(BOOT_DIR)/boot.bin
+KERNEL_ELF := $(BUILD_DIR)/kernel.elf
+OS_IMAGE := $(BUILD_DIR)/os-image.bin
+
+# Object-файлы
+OBJS := \
+    $(BUILD_DIR)/kernel.o \
+    $(BUILD_DIR)/vga.o \
+    $(BUILD_DIR)/memory.o \
+    $(BUILD_DIR)/interrupts.o \
+    $(BUILD_DIR)/keyboard.o \
+    $(BUILD_DIR)/paging.o \
+    $(BUILD_DIR)/fs.o \
+    $(BUILD_DIR)/shell.o \
+    $(BUILD_DIR)/task.o \
+    $(BUILD_DIR)/ata.o \
+    $(BUILD_DIR)/elf.o \
+    $(BUILD_DIR)/isr.o
+
+# Основная цель
+all: $(OS_IMAGE)
+
+# Сборка загрузчика
+$(BOOT_BIN): $(BOOT_DIR)/boot.asm
 	$(ASM) -f bin $< -o $@
 
-$(BUILD_DIR)/kernel.o: $(KERNEL_DIR)/kernel.c
+# Компиляция C-файлов
+$(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/vga.o: $(KERNEL_DIR)/vga.c
@@ -61,13 +95,23 @@ $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/paging.o $(BUILD_DIR)/fs.o $(BUILD_DIR)/she
 
 $(BUILD_DIR)/kernel.elf: $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
+=======
+# Компиляция ассемблера
+$(BUILD_DIR)/isr.o: $(KERNEL_DIR)/isr.S
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Создание образа ОС
-os-image: $(BOOT_DIR)/boot.bin $(BUILD_DIR)/kernel.elf
-	cat $^ > os-image.bin
+# Линковка ядра
+$(KERNEL_ELF): $(OBJS)
+	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 
-run: os-image
-	qemu-system-i386 -drive format=raw,file=os-image.bin
+# Создание финального образа ОС
+$(OS_IMAGE): $(BOOT_BIN) $(KERNEL_ELF)
+	cat $^ > $@
 
+# Очистка
 clean:
 	rm -f $(BOOT_DIR)/*.bin $(BUILD_DIR)/* os-image.bin
+=======
+	rm -f $(BOOT_DIR)/*.bin $(BUILD_DIR)/* $(OS_IMAGE)
+
+.PHONY: all clean
