@@ -55,5 +55,3 @@ void clear_graphics(unsigned char color) {
         vga[i] = color;
     }
 }
-
-}
