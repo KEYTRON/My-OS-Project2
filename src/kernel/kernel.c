@@ -42,6 +42,8 @@ void kernel_main(void) {
         char out[3] = {
             "0123456789ABCDEF"[(c>>4)&0xF],
             "0123456789ABCDEF"[c&0xF],
+            "0123456789ABCDEF"[(c >> 4) & 0xF],
+            "0123456789ABCDEF"[c & 0xF],
             '\0'
         };
         print_string(out);
@@ -65,5 +67,8 @@ void kernel_main(void) {
 
     print_string("Starting shell...\n");
     shell();
+    print_string("Starting shell...\n");
+    shell();
+
     while (1) {}
 }
