@@ -10,6 +10,12 @@ void kernel_main(void) {
     print_string("Welcome to MyOS!\n");
     print_string("Kernel initialized.\n");
     init_keyboard();
-
+    print_string("Type something and press Enter:\n");
+    char buf[128];
+    read_line(buf, sizeof(buf));
+    print_string("\nYou typed: ");
+    print_string(buf);
+    print_string("\n");
+    while (1) {}
 }
 
