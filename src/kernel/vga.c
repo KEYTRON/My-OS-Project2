@@ -1,5 +1,4 @@
 #include "vga.h"
-
 #define VGA_ADDRESS 0xB8000
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
@@ -55,4 +54,6 @@ void clear_graphics(unsigned char color) {
     for (int i = 0; i < 320 * 200; i++) {
         vga[i] = color;
     }
+}
+
 }

@@ -56,6 +56,17 @@ const char* fs_read(const char *name) {
     return 0;
 }
 
+int fs_get(const char *name, const char **data, unsigned int *size) {
+    for (int i = 0; i < file_count; i++) {
+        if (str_cmp(files[i].name, name)) {
+            *data = files[i].data;
+            *size = files[i].size;
+            return 0;
+        }
+    }
+    return -1;
+}
+
 void fs_list() {
     for (int i = 0; i < file_count; i++) {
         print_string(files[i].name);
