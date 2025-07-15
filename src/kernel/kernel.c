@@ -2,20 +2,56 @@
 #include "keyboard.h"
 #include "paging.h"
 #include "vga.h"
+#include "fs.h"
+#include "shell.h"
+#include "task.h"
+#include "ata.h"
+
+static void demo_task1() {
+    print_string("Task1 running\n");
+}
+
+static void demo_task2() {
+    print_string("Task2 running\n");
+}
 
 void kernel_main(void) {
     clear_screen();
     init_interrupts();
     init_paging();
+    fs_init();
+    ata_init();
+    
     print_string("Welcome to MyOS!\n");
     print_string("Kernel initialized.\n");
     init_keyboard();
-    print_string("Type something and press Enter:\n");
-    char buf[128];
-    read_line(buf, sizeof(buf));
-    print_string("\nYou typed: ");
-    print_string(buf);
+
+    tasking_init();
+    task_create(demo_task1);
+    task_create(demo_task2);
+    print_string("Starting simple multitasking demo...\n");
+    
+    for (int i = 0; i < 5; i++) {
+        task_run_once();
+    }
+
+    unsigned char sector[512];
+    ata_read_sector(0, sector);
+    print_string("First bytes of disk: \n");
+    for (int i = 0; i < 16; i++) {
+        char c = sector[i];
+        char out[3] = {
+            "0123456789ABCDEF"[(c >> 4) & 0xF],
+            "0123456789ABCDEF"[c & 0xF],
+            '\0'
+        };
+        print_string(out);
+        put_char(' ');
+    }
     print_string("\n");
+
+    print_string("Starting shell...\n");
+    shell();
+
     while (1) {}
 }
-

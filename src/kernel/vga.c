@@ -1,4 +1,5 @@
 #include "vga.h"
+
 #define VGA_ADDRESS 0xB8000
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
@@ -41,3 +42,17 @@ void print_string(const char *str) {
     }
 }
 
+// === Графические функции (320x200x256 VGA mode) ===
+
+void put_pixel(int x, int y, unsigned char color) {
+    unsigned char *vga = (unsigned char*)0xA0000;
+    unsigned int offset = y * 320 + x;
+    vga[offset] = color;
+}
+
+void clear_graphics(unsigned char color) {
+    unsigned char *vga = (unsigned char*)0xA0000;
+    for (int i = 0; i < 320 * 200; i++) {
+        vga[i] = color;
+    }
+}
