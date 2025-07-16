@@ -8,3 +8,5 @@ void print_string(const char *str);
 // Графический режим 320x200x256
 void put_pixel(int x, int y, unsigned char color);
 void clear_graphics(unsigned char color);
+
+#endif
