@@ -1,4 +1,4 @@
-// vga.h — работа с текстовым режимом VGA
+// vga.h — работа с текстовым режимом VGA
 #ifndef VGA_H
 #define VGA_H
 
@@ -30,6 +30,9 @@ enum vga_color {
 
 // Инициализация VGA (просто очищаем экран)
 void vga_init();
+
+// Установить цвет (фоновый + символа)
+uint8_t vga_entry_color(uint8_t fg, uint8_t bg);
 
 // Написать символ с цветом
 void vga_putc_color(char c, uint8_t color);

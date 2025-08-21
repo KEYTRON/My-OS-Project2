@@ -1,6 +1,6 @@
-// gdt.c — реализация GDT для x86_64
+// gdt.c — реализация GDT для x86_64
 #include "gdt.h"
-#include <string.h>
+#include "../../lib/string.h"
 
 // Определяем массив GDT из 6 записей
 static struct GDTEntry gdt_entries[GDT_ENTRIES];
@@ -28,7 +28,7 @@ void gdt_init() {
     set_gdt_entry(GDT_NULL_SEGMENT, 0, 0, 0, 0);
 
     // 2) Кодовый сегмент ядра (0x08)
-    // base=0, limit=0xFFFFF (4GB), access=0x9A (present, ring 0, код), gran=0xA0 (4K, 64‑бит)
+    // base=0, limit=0xFFFFF (4GB), access=0x9A (present, ring 0, код), gran=0xA0 (4K, 64-бит)
     set_gdt_entry(GDT_KERNEL_CODE_SEGMENT, 0x0, 0x000FFFFF, 0x9A, 0xA0);
 
     // 3) Данные сегмент ядра (0x10)

@@ -1,4 +1,4 @@
-// vga.c — работа с текстовым буфером VGA
+// vga.c — работа с текстовым буфером VGA
 #include "vga.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -10,11 +10,11 @@ static uint8_t terminal_col = 0;
 static uint8_t terminal_color;
 
 // Установить цвет (фоновый + символа)
-static inline uint8_t vga_entry_color(uint8_t fg, uint8_t bg) {
+uint8_t vga_entry_color(uint8_t fg, uint8_t bg) {
     return fg | bg << 4;
 }
 
-// Создать 16‑битную ячейку: символ + цвет
+// Создать 16-битную ячейку: символ + цвет
 static inline uint16_t vga_entry(unsigned char uc, uint8_t color) {
     return (uint16_t)uc | (uint16_t)color << 8;
 }

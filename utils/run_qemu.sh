@@ -1,5 +1,5 @@
 #!/bin/bash
-# run_qemu.sh — запускает ISO в QEMU
+# run_qemu.sh — запускает ISO в QEMU
 
 ISO=myos.iso
 
@@ -14,5 +14,4 @@ qemu-system-x86_64 \
     -serial stdio \
     -no-reboot \
     -display none \
-    -enable-kvm \
     -smp 2

@@ -1,16 +1,16 @@
-// keyboard.h — обработчик PS/2 клавиатуры
-#ifndef KEYBOARD_H
-#define KEYBOARD_H
+// serial.h — работа с COM-портом (UART)
+#ifndef SERIAL_H
+#define SERIAL_H
 
 #include <stdint.h>
 
-// Таблица соответствия scan code → ASCII (для простейших символов)
-extern char keymap[128];
+// Инициализация COM1 порта
+void serial_init();
 
-// Функция инициализации клавиатуры (в основном регистрируем обработчик IRQ1)
-void keyboard_init();
+// Отправка одного символа
+void serial_write_char(char c);
 
-// Функция-обработчик (вызывается из irq_handler)
-void keyboard_callback();
+// Отправка строки
+void serial_write_string(const char* str);
 
-#endif // KEYBOARD_H
+#endif // SERIAL_H

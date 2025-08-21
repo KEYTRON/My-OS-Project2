@@ -1,6 +1,6 @@
-// idt.c — реализация IDT
+// idt.c — реализация IDT
 #include "idt.h"
-#include <string.h>
+#include "../../lib/string.h"
 
 extern void load_idt(void*);  // Ассемблерная функция, выполняющая lidt [rdi]
 
@@ -27,32 +27,71 @@ void register_interrupt_handler(int n, void (*handler)()) {
     interrupt_handlers[n] = handler;
 }
 
+// Вспомогательная функция для отправки команд в порты
+static inline void outb(uint16_t port, uint8_t val) {
+    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+
+// Ремап PIC (Programmable Interrupt Controller)
+static void remap_pic() {
+    // ICW1: начинаем инициализацию
+    outb(0x20, 0x11);  // мастер PIC
+    outb(0xA0, 0x11);  // слейв PIC
+    
+    // ICW2: ремап IRQ на векторы 32-47
+    outb(0x21, 0x20);  // мастер: IRQ 0-7 -> векторы 32-39
+    outb(0xA1, 0x28);  // слейв: IRQ 8-15 -> векторы 40-47
+    
+    // ICW3: указываем каскад
+    outb(0x21, 0x04);  // мастер: IRQ2 подключен слейв
+    outb(0xA1, 0x02);  // слейв: ID = 2
+    
+    // ICW4: режим работы
+    outb(0x21, 0x01);  // мастер: 8086 режим
+    outb(0xA1, 0x01);  // слейв: 8086 режим
+    
+    // Маскируем все IRQ кроме клавиатуры (IRQ1)
+    outb(0x21, 0xFD);  // мастер: разрешаем только IRQ1 (клавиатура)
+    outb(0xA1, 0xFF);  // слейв: маскируем все
+}
+
 // Инициализационная функция
 void idt_init() {
     // Обнуляем таблицу
     memset(&idt_entries, 0, sizeof(idt_entries));
 
-    // По умолчанию заполняем каждый дескриптор указателем на ru_stub, если нет регистраций
-    for (int i = 0; i < IDT_ENTRIES; i++) {
-        // Здесь мы можем сделать так, чтобы все неприсвоенные исключения шли в общую обработку
-        set_idt_entry(i, (uint64_t)0, 0x08, 0x8E); // временно нулевой offset, будем заполнять позже
-    }
+    // Ремап PIC
+    remap_pic();
 
-    // Здесь можно прописать истинные адреса обработчиков (из isr.c), например:
-    extern void isr_stub_table(); // массив ассемблерных заглушек, вызывающих C‑функцию
+    // Устанавливаем ISR заглушки (0-31)
+    extern void isr0(), isr1(), isr2(), isr3(), isr4(), isr5(), isr6(), isr7();
+    extern void isr8(), isr9(), isr10(), isr11(), isr12(), isr13(), isr14(), isr15();
+    extern void isr16(), isr17(), isr18(), isr19(), isr20(), isr21(), isr22(), isr23();
+    extern void isr24(), isr25(), isr26(), isr27(), isr28(), isr29(), isr30(), isr31();
+    
+    void* isr_stubs[] = {
+        isr0, isr1, isr2, isr3, isr4, isr5, isr6, isr7,
+        isr8, isr9, isr10, isr11, isr12, isr13, isr14, isr15,
+        isr16, isr17, isr18, isr19, isr20, isr21, isr22, isr23,
+        isr24, isr25, isr26, isr27, isr28, isr29, isr30, isr31
+    };
+    
     for (int i = 0; i < 32; i++) {
-        set_idt_entry(i, (uint64_t)(&isr_stub_table + i * 16), 0x08, 0x8E);
+        set_idt_entry(i, (uint64_t)isr_stubs[i], 0x08, 0x8E);
     }
 
-    // Таймер (IRQ0) будет на 32 номер (0x20)
-    extern void irq0_handler_stub();
-    set_idt_entry(32, (uint64_t)irq0_handler_stub, 0x08, 0x8E);
-
-    // Клавиатурный IRQ (IRQ1 → 33)
-    extern void irq1_handler_stub();
-    set_idt_entry(33, (uint64_t)irq1_handler_stub, 0x08, 0x8E);
-
-    // И так далее можно прописать остальные IRQ...
+    // Устанавливаем IRQ заглушки (32-47)
+    extern void irq0(), irq1(), irq2(), irq3(), irq4(), irq5(), irq6(), irq7();
+    extern void irq8(), irq9(), irq10(), irq11(), irq12(), irq13(), irq14(), irq15();
+    
+    void* irq_stubs[] = {
+        irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7,
+        irq8, irq9, irq10, irq11, irq12, irq13, irq14, irq15
+    };
+    
+    for (int i = 0; i < 16; i++) {
+        set_idt_entry(32 + i, (uint64_t)irq_stubs[i], 0x08, 0x8E);
+    }
 
     // Настраиваем указатель IDTR
     idt_ptr.limit = sizeof(idt_entries) - 1;

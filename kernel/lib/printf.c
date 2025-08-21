@@ -1,9 +1,8 @@
-// printf.c — простая реализация printf
+// printf.c — простая реализация printf
 #include "printf.h"
 #include "../drivers/vga.h"
 #include "../drivers/serial.h"
 #include "../lib/string.h"
-#include "../lib/mem.h"
 
 // Предположим, что по умолчанию используем VGA, но можем переключаться:
 #define USE_VGA
@@ -18,7 +17,7 @@ static void put_char(char c) {
 #endif
 }
 
-// Перевод числа base‑осный в строку (рверсия itoa)
+// Перевод числа base-осный в строку (рверсия itoa)
 static void itoa(unsigned long value, char* str, int base) {
     char* ptr = str, *ptr1 = str, tmp_char;
     unsigned long tmp_value;

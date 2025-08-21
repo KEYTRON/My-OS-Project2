@@ -1,8 +1,8 @@
-// isr.c — обработчики прерываний
+// isr.c — обработчики прерываний
 #include "isr.h"
-#include "../drivers/serial.h"
-#include "../drivers/vga.h"
-#include "../lib/printf.h"
+#include "../../drivers/serial.h"
+#include "../../drivers/vga.h"
+#include "../../lib/printf.h"
 
 // Массив с сообщениями об исключениях CPU (0..31)
 const char* exception_messages[] = {
@@ -58,7 +58,7 @@ void isr_handler(registers_t* regs) {
 void irq_handler(registers_t* regs) {
     if (regs->int_no == 32) {
         // обработка таймера
-        // можно увеличить счетчик «тик‑тайма» и переключить задачи
+        // можно увеличить счетчик «тик-тайма» и переключить задачи
         printf("Timer interrupt!\n");
     } else if (regs->int_no == 33) {
         // обработка клавиатуры (scan code в IO port 0x60)
@@ -69,6 +69,10 @@ void irq_handler(registers_t* regs) {
     }
 
     // Отправляем EOI (End Of Interrupt) контроллеру PIC
-    asm volatile("mov al, 0x20; out 0x20, al");  // мастер PIC
-    asm volatile("mov al, 0x20; out 0xA0, al");  // слейв PIC
+    if (regs->int_no >= 40) {
+        // Слейв PIC
+        asm volatile("movb $0x20, %%al; outb %%al, $0xA0" : : : "al");
+    }
+    // Мастер PIC (всегда)
+    asm volatile("movb $0x20, %%al; outb %%al, $0x20" : : : "al");
 }
