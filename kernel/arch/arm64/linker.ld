@@ -3,8 +3,8 @@ OUTPUT_FORMAT(elf64-littleaarch64)
 ENTRY(_start)
 
 SECTIONS {
-    /* ARM64 ядро загружается по адресу 0x40000000 */
-    . = 0x40000000;
+    /* ARM64 ядро загружается по адресу 0x80000 (QEMU virt) */
+    . = 0x80000;
 
     .text.boot : {
         *(.text.boot)
