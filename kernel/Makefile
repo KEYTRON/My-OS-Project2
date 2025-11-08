@@ -4,17 +4,18 @@
 ARCH ?= x86_64
 
 # Кросс-компиляторы для разных архитектур
-X86_64_CC := x86_64-elf-gcc
-X86_64_LD := x86_64-elf-ld
+# Используем gcc с флагами для компиляции без зависимостей от ОС
+X86_64_CC := $(shell which x86_64-elf-gcc || which gcc)
+X86_64_LD := $(shell which x86_64-elf-ld || which ld)
 X86_64_NASM := nasm
 
-ARM64_CC := aarch64-elf-gcc
-ARM64_LD := aarch64-elf-ld
-ARM64_AS := aarch64-elf-as
+ARM64_CC := $(shell which aarch64-elf-gcc || which gcc)
+ARM64_LD := $(shell which aarch64-elf-ld || which ld)
+ARM64_AS := $(shell which aarch64-elf-as || which as)
 
-RISCV64_CC := riscv64-elf-gcc
-RISCV64_LD := riscv64-elf-ld
-RISCV64_AS := riscv64-elf-as
+RISCV64_CC := $(shell which riscv64-elf-gcc || which gcc)
+RISCV64_LD := $(shell which riscv64-elf-ld || which ld)
+RISCV64_AS := $(shell which riscv64-elf-as || which as)
 
 # Выбираем компиляторы в зависимости от архитектуры
 ifeq ($(ARCH),x86_64)

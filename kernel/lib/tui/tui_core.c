@@ -7,6 +7,13 @@
 // Глобальная TUI система
 static tui_system_t g_tui_system = {0};
 
+// Буфер клавиатуры для TUI
+#define KEYBOARD_BUFFER_SIZE 256
+static char keyboard_buffer[KEYBOARD_BUFFER_SIZE] = {0};
+static uint16_t keyboard_head = 0;
+static uint16_t keyboard_tail = 0;
+static bool tui_should_exit = false;
+
 // Инициализация TUI системы
 bool tui_system_init(void) {
     // Получаем размер экрана
@@ -58,19 +65,21 @@ void tui_system_cleanup(void) {
     // Уничтожаем все окна
     tui_window_t* window = g_tui_system.windows;
     while (window) {
+        tui_window_t* next = window->base.next;
         tui_destroy_window(window);
-        // TODO: Реализовать правильное управление списком окон
-        break;
+        window = next;
     }
-    
+    g_tui_system.windows = NULL;
+
     // Уничтожаем все меню
     tui_menu_t* menu = g_tui_system.menus;
     while (menu) {
+        tui_menu_t* next = menu->base.next;
         tui_destroy_menu(menu);
-        // TODO: Реализовать правильное управление списком меню
-        break;
+        menu = next;
     }
-    
+    g_tui_system.menus = NULL;
+
     // Очищаем буферы
     g_tui_system.screen_buffer = NULL;
     g_tui_system.back_buffer = NULL;
@@ -101,32 +110,41 @@ void tui_system_update(void) {
 // Обработка событий
 void tui_system_handle_event(tui_event_t* event) {
     if (!event) return;
-    
-    // Передаем событие в сфокусированное окно
-    if (g_tui_system.focused_window && g_tui_system.focused_window->base.event_handler) {
-        g_tui_system.focused_window->base.event_handler(event);
-    }
-    
+
     // Обрабатываем системные события
     switch (event->type) {
         case TUI_EVENT_KEY_PRESS:
             // Обработка системных клавиш
-            if (event->data.key.ctrl && event->data.key.key_code == 'Q') {
+            if (event->data.key.ctrl && event->data.key.key_code == 'q') {
                 // Ctrl+Q - выход из TUI
-                // TODO: Реализовать выход
+                tui_should_exit = true;
+                return;
+            }
+            // Добавляем символ в буфер
+            if (event->data.key.key_code > 0) {
+                uint16_t next_head = (keyboard_head + 1) % KEYBOARD_BUFFER_SIZE;
+                if (next_head != keyboard_tail) {
+                    keyboard_buffer[keyboard_head] = event->data.key.key_code;
+                    keyboard_head = next_head;
+                }
             }
             break;
-            
+
         case TUI_EVENT_MOUSE_CLICK:
             // Обработка кликов мыши
             break;
-            
+
         case TUI_EVENT_WINDOW_RESIZE:
             // Обработка изменения размера экрана
             break;
-            
+
         default:
             break;
+    }
+
+    // Передаем событие в сфокусированное окно
+    if (g_tui_system.focused_window && g_tui_system.focused_window->base.event_handler) {
+        g_tui_system.focused_window->base.event_handler(event);
     }
 }
 
@@ -138,26 +156,31 @@ void tui_clear_screen(void) {
         .bg_color = g_tui_system.default_bg,
         .attributes = TUI_ATTR_NORMAL
     };
-    
+
     for (int i = 0; i < g_tui_system.screen_size.width * g_tui_system.screen_size.height; i++) {
         g_tui_system.screen_buffer[i] = clear_char;
         g_tui_system.back_buffer[i] = clear_char;
     }
-    
-    // Обновляем VGA
-    // TODO: Реализовать правильное обновление VGA
+
+    // Обновляем VGA буфер
+    vga_init();
 }
 
 // Установка позиции курсора
 void tui_set_cursor_pos(tui_pos_t pos) {
     if (pos.x >= g_tui_system.screen_size.width) pos.x = g_tui_system.screen_size.width - 1;
     if (pos.y >= g_tui_system.screen_size.height) pos.y = g_tui_system.screen_size.height - 1;
-    
+
     g_tui_system.cursor_pos = pos;
-    
-    // Обновляем VGA курсор
+
+    // Обновляем VGA курсор через port I/O (VGA CRTC)
     uint16_t offset = pos.y * g_tui_system.screen_size.width + pos.x;
-    // TODO: Реализовать правильное обновление VGA курсора
+    // Устанавливаем высокий байт смещения курсора
+    __asm__ __volatile__("outb %%al, $0x3D4" : : "a"(0x0E));
+    __asm__ __volatile__("outb %%al, $0x3D5" : : "a"((offset >> 8) & 0xFF));
+    // Устанавливаем низкий байт смещения курсора
+    __asm__ __volatile__("outb %%al, $0x3D4" : : "a"(0x0F));
+    __asm__ __volatile__("outb %%al, $0x3D5" : : "a"(offset & 0xFF));
 }
 
 // Показать/скрыть курсор
@@ -166,8 +189,12 @@ void tui_show_cursor(bool show) {
     if (show) {
         tui_set_cursor_pos(g_tui_system.cursor_pos);
     } else {
-        // Скрываем курсор (ставим в невидимую позицию)
-        // TODO: Реализовать правильное скрытие VGA курсора
+        // Скрываем курсор (ставим в невидимую позицию - за границу экрана)
+        uint16_t offset = g_tui_system.screen_size.width * g_tui_system.screen_size.height;
+        __asm__ __volatile__("outb %%al, $0x3D4" : : "a"(0x0E));
+        __asm__ __volatile__("outb %%al, $0x3D5" : : "a"((offset >> 8) & 0xFF));
+        __asm__ __volatile__("outb %%al, $0x3D4" : : "a"(0x0F));
+        __asm__ __volatile__("outb %%al, $0x3D5" : : "a"(offset & 0xFF));
     }
 }
 
@@ -182,15 +209,17 @@ void tui_draw_char(tui_pos_t pos, char c, tui_color_t fg, tui_color_t bg) {
     if (pos.x >= g_tui_system.screen_size.width || pos.y >= g_tui_system.screen_size.height) {
         return;
     }
-    
+
     size_t index = pos.y * g_tui_system.screen_size.width + pos.x;
     g_tui_system.back_buffer[index].character = c;
     g_tui_system.back_buffer[index].fg_color = fg;
     g_tui_system.back_buffer[index].bg_color = bg;
     g_tui_system.back_buffer[index].attributes = TUI_ATTR_NORMAL;
-    
-    // Обновляем VGA
-    // TODO: Реализовать правильное обновление VGA символа
+
+    // Обновляем VGA буфер напрямую (0xB8000 - текстовый режим VGA)
+    uint16_t* vga_buffer = (uint16_t*)0xB8000;
+    uint8_t vga_color = vga_entry_color(fg, bg); // Функция из vga.h
+    vga_buffer[index] = (uint16_t)c | ((uint16_t)vga_color << 8);
 }
 
 // Рисование строки
@@ -280,18 +309,43 @@ uint32_t tui_get_tick_count(void) {
     return g_tui_system.tick_count;
 }
 
+// Функция для добавления символа в буфер (вызывается из обработчика клавиатуры)
+void tui_add_char_to_buffer(char c) {
+    uint16_t next_head = (keyboard_head + 1) % KEYBOARD_BUFFER_SIZE;
+    if (next_head != keyboard_tail) {
+        keyboard_buffer[keyboard_head] = c;
+        keyboard_head = next_head;
+    }
+}
+
+// Получение флага выхода
+bool tui_should_exit_loop(void) {
+    return tui_should_exit;
+}
+
+// Сброс флага выхода
+void tui_reset_exit_flag(void) {
+    tui_should_exit = false;
+}
+
 // Обработка ввода
 bool tui_is_key_pressed(uint16_t key_code) {
-    // TODO: Реализовать проверку нажатия клавиши
-    return false;
+    // Проверяем, есть ли символ в буфере
+    return keyboard_head != keyboard_tail;
 }
 
 char tui_get_char(void) {
-    // TODO: Реализовать получение символа
-    return '\0';
+    // Получаем символ из буфера
+    if (keyboard_head == keyboard_tail) {
+        return '\0';
+    }
+    char c = keyboard_buffer[keyboard_tail];
+    keyboard_tail = (keyboard_tail + 1) % KEYBOARD_BUFFER_SIZE;
+    return c;
 }
 
 tui_event_t* tui_get_event(void) {
-    // TODO: Реализовать получение события
+    // Получение события из очереди
+    // В настоящее время события обрабатываются напрямую
     return NULL;
 }
