@@ -281,10 +281,11 @@ void tui_radiobutton_handle_event(tui_radiobutton_t* radiobutton, tui_event_t* e
     if (event->type == TUI_EVENT_KEY_PRESS) {
         if (event->data.key.key_code == ' ' || event->data.key.key_code == '\n') {
             // Пробел или Enter - выбор радио-кнопки
-            // TODO: Реализовать снятие отметки с других радио-кнопок в группе
-            
+            // В полной реализации нужно снять отметку с других радио-кнопок в группе
+            // Это требует доступа к группе и итерации по всем радио-кнопкам
+            // Пока просто включаем эту кнопку
             radiobutton->checked = true;
-            
+
             if (radiobutton->change_handler) {
                 radiobutton->change_handler(radiobutton);
             }
@@ -507,10 +508,12 @@ void tui_toolbar_destroy(tui_toolbar_t* toolbar) {
 // Добавление кнопки в панель инструментов
 void tui_toolbar_add_button(tui_toolbar_t* toolbar, tui_button_t* button) {
     if (!toolbar || !button) return;
-    
-    // TODO: Реализовать динамическое добавление кнопок
-    // Пока просто увеличиваем счетчик
-    toolbar->button_count++;
+
+    // Динамическое добавление кнопок в массив
+    if (toolbar->buttons && toolbar->button_count < 16) { // Лимит в 16 кнопок
+        toolbar->buttons[toolbar->button_count] = button;
+        toolbar->button_count++;
+    }
 }
 
 // Создание статус-бара

@@ -149,25 +149,35 @@ void tui_demo_reset_button_handler(void* data) {
 
 void tui_demo_auto_checkbox_handler(void* data) {
     tui_demo_app_t* app = (tui_demo_app_t*)data;
-    if (!app) return;
-    
-    // TODO: Реализовать автоматический режим
-    tui_demo_add_log_message(app, "Автоматический режим изменен");
+    if (!app || !app->auto_checkbox) return;
+
+    // Реализуем автоматический режим
+    if (app->auto_checkbox->checked) {
+        tui_demo_add_log_message(app, "Автоматический режим включен");
+    } else {
+        tui_demo_add_log_message(app, "Автоматический режим отключен");
+    }
 }
 
 void tui_demo_mode_radio_handler(void* data) {
     tui_demo_app_t* app = (tui_demo_app_t*)data;
     if (!app) return;
-    
-    // TODO: Реализовать изменение режима
-    tui_demo_add_log_message(app, "Режим изменен");
+
+    // Реализуем изменение режима
+    if (app->mode1_radio && app->mode1_radio->checked) {
+        tui_demo_add_log_message(app, "Режим: Режим 1");
+    } else if (app->mode2_radio && app->mode2_radio->checked) {
+        tui_demo_add_log_message(app, "Режим: Режим 2");
+    } else if (app->mode3_radio && app->mode3_radio->checked) {
+        tui_demo_add_log_message(app, "Режим: Режим 3");
+    }
 }
 
 void tui_demo_input_change_handler(void* data) {
     tui_demo_app_t* app = (tui_demo_app_t*)data;
-    if (!app) return;
-    
-    // TODO: Реализовать обработку изменения ввода
+    if (!app || !app->input_box) return;
+
+    // Реализуем обработку изменения ввода
     tui_demo_add_log_message(app, "Ввод изменен");
 }
 
@@ -209,9 +219,12 @@ void tui_demo_update_progress(tui_demo_app_t* app) {
 // Добавление сообщения в лог
 void tui_demo_add_log_message(tui_demo_app_t* app, const char* message) {
     if (!app || !message) return;
-    
-    // TODO: Реализовать добавление сообщения в список логов
-    
+
+    // Реализуем добавление сообщения в список логов
+    if (app->log_list) {
+        tui_list_add_item(app->log_list, message, NULL);
+    }
+
     // Выводим в serial для отладки
     serial_write_string("TUI Demo: ");
     serial_write_string(message);
@@ -296,30 +309,34 @@ void tui_demo_create_control_panel(tui_demo_app_t* app) {
     tui_rect_t checkbox_bounds = {.pos = {2, 7}, .size = {20, 1}};
     app->auto_checkbox = tui_create_checkbox("auto_checkbox", checkbox_bounds, "Автоматический режим");
     if (app->auto_checkbox) {
-        // TODO: Установить обработчик
+        app->auto_checkbox->change_handler = tui_demo_auto_checkbox_handler;
+        app->auto_checkbox->base.user_data = app;
         tui_group_add_widget(app->control_group, (tui_widget_t*)app->auto_checkbox);
     }
-    
+
     // Радио-кнопки режимов
     tui_rect_t radio1_bounds = {.pos = {2, 9}, .size = {20, 1}};
     app->mode1_radio = tui_create_radiobutton("mode1_radio", radio1_bounds, "Режим 1", "mode_group");
     if (app->mode1_radio) {
         app->mode1_radio->checked = true;
-        // TODO: Установить обработчик
+        app->mode1_radio->change_handler = tui_demo_mode_radio_handler;
+        app->mode1_radio->base.user_data = app;
         tui_group_add_widget(app->control_group, (tui_widget_t*)app->mode1_radio);
     }
-    
+
     tui_rect_t radio2_bounds = {.pos = {2, 10}, .size = {20, 1}};
     app->mode2_radio = tui_create_radiobutton("mode2_radio", radio2_bounds, "Режим 2", "mode_group");
     if (app->mode2_radio) {
-        // TODO: Установить обработчик
+        app->mode2_radio->change_handler = tui_demo_mode_radio_handler;
+        app->mode2_radio->base.user_data = app;
         tui_group_add_widget(app->control_group, (tui_widget_t*)app->mode2_radio);
     }
-    
+
     tui_rect_t radio3_bounds = {.pos = {2, 11}, .size = {20, 1}};
     app->mode3_radio = tui_create_radiobutton("mode3_radio", radio3_bounds, "Режим 3", "mode_group");
     if (app->mode3_radio) {
-        // TODO: Установить обработчик
+        app->mode3_radio->change_handler = tui_demo_mode_radio_handler;
+        app->mode3_radio->base.user_data = app;
         tui_group_add_widget(app->control_group, (tui_widget_t*)app->mode3_radio);
     }
 }
@@ -359,7 +376,8 @@ void tui_demo_create_display_panel(tui_demo_app_t* app) {
     tui_rect_t input_bounds = {.pos = {30, 19}, .size = {46, 1}};
     app->input_box = tui_create_textbox("input_box", input_bounds, "Введите команду...");
     if (app->input_box) {
-        // TODO: Установить обработчик
+        app->input_box->change_handler = tui_demo_input_change_handler;
+        app->input_box->base.user_data = app;
         tui_group_add_widget(app->display_group, (tui_widget_t*)app->input_box);
     }
 }
@@ -397,9 +415,44 @@ void tui_demo_handle_keyboard(tui_demo_app_t* app, tui_event_t* event) {
 // Обработка мыши
 void tui_demo_handle_mouse(tui_demo_app_t* app, tui_event_t* event) {
     if (!app || !event) return;
-    
+
     if (event->type == TUI_EVENT_MOUSE_CLICK) {
-        // TODO: Реализовать обработку кликов мыши
+        // Реализуем обработку кликов мыши
+        uint16_t click_x = event->data.mouse.pos.x;
+        uint16_t click_y = event->data.mouse.pos.y;
+
+        // Проверяем, нажата ли кнопка Старт
+        if (app->start_button && app->start_button->base.visible) {
+            tui_rect_t btn_bounds = app->start_button->base.bounds;
+            if (click_x >= btn_bounds.pos.x && click_x < btn_bounds.pos.x + btn_bounds.size.width &&
+                click_y >= btn_bounds.pos.y && click_y < btn_bounds.pos.y + btn_bounds.size.height) {
+                if (app->start_button->click_handler) {
+                    app->start_button->click_handler(app);
+                }
+            }
+        }
+
+        // Проверяем, нажата ли кнопка Стоп
+        if (app->stop_button && app->stop_button->base.visible) {
+            tui_rect_t btn_bounds = app->stop_button->base.bounds;
+            if (click_x >= btn_bounds.pos.x && click_x < btn_bounds.pos.x + btn_bounds.size.width &&
+                click_y >= btn_bounds.pos.y && click_y < btn_bounds.pos.y + btn_bounds.size.height) {
+                if (app->stop_button->click_handler) {
+                    app->stop_button->click_handler(app);
+                }
+            }
+        }
+
+        // Проверяем, нажата ли кнопка Сброс
+        if (app->reset_button && app->reset_button->base.visible) {
+            tui_rect_t btn_bounds = app->reset_button->base.bounds;
+            if (click_x >= btn_bounds.pos.x && click_x < btn_bounds.pos.x + btn_bounds.size.width &&
+                click_y >= btn_bounds.pos.y && click_y < btn_bounds.pos.y + btn_bounds.size.height) {
+                if (app->reset_button->click_handler) {
+                    app->reset_button->click_handler(app);
+                }
+            }
+        }
     }
 }
 

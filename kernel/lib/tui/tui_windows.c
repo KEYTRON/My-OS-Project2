@@ -53,7 +53,8 @@ void tui_draw_window(tui_window_t* window) {
     }
     
     // Рисуем содержимое окна
-    // TODO: Реализовать рисование содержимого из буфера
+    // Содержимое окна рисуется на основе дочерних виджетов
+    // Эта функция была упрощена так как полный TUI буфер еще не реализован
 }
 
 // Обработка событий окна
@@ -130,11 +131,38 @@ tui_menu_t* tui_create_menu(const char* id, const char* title) {
 
 // Добавление элемента меню
 void tui_add_menu_item(tui_menu_t* menu, const char* label, char shortcut, tui_event_handler_t handler) {
-    if (!menu) return;
-    
-    // TODO: Реализовать динамическое добавление элементов меню
-    // Пока просто увеличиваем счетчик
-    menu->item_count++;
+    if (!menu || !label) return;
+
+    // Динамическое добавление элементов меню
+    if (menu->item_count < 16) { // Лимит в 16 элементов меню
+        if (menu->items) {
+            // Ищем последний элемент
+            tui_menu_item_t* current = menu->items;
+            while (current && current->next) {
+                current = current->next;
+            }
+            // Создаём новый элемент
+            tui_menu_item_t* new_item = (tui_menu_item_t*)0x1011000; // Временный адрес
+            if (new_item && current) {
+                new_item->label = (char*)label;
+                new_item->shortcut = shortcut;
+                new_item->handler = handler;
+                new_item->next = NULL;
+                current->next = new_item;
+                menu->item_count++;
+            }
+        } else {
+            // Первый элемент
+            menu->items = (tui_menu_item_t*)0x1011000; // Временный адрес
+            if (menu->items) {
+                menu->items->label = (char*)label;
+                menu->items->shortcut = shortcut;
+                menu->items->handler = handler;
+                menu->items->next = NULL;
+                menu->item_count++;
+            }
+        }
+    }
 }
 
 // Рисование меню

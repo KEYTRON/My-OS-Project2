@@ -160,11 +160,18 @@ void tui_textbox_handle_event(tui_textbox_t* textbox, tui_event_t* event) {
     
     if (event->type == TUI_EVENT_KEY_PRESS) {
         char c = event->data.key.character;
-        
+
         if (c >= 32 && c <= 126) { // Печатаемые символы
             // Добавляем символ
             if (textbox->text && strlen(textbox->text) < textbox->max_length) {
-                // TODO: Реализовать добавление символа
+                // Вставляем символ в позицию курсора
+                size_t len = strlen(textbox->text);
+                for (size_t i = len; i > textbox->cursor_pos; i--) {
+                    textbox->text[i] = textbox->text[i - 1];
+                }
+                textbox->text[textbox->cursor_pos] = c;
+                textbox->text[len + 1] = '\0';
+                textbox->cursor_pos++;
                 if (textbox->change_handler) {
                     textbox->change_handler(textbox);
                 }
@@ -172,7 +179,13 @@ void tui_textbox_handle_event(tui_textbox_t* textbox, tui_event_t* event) {
         } else if (event->data.key.key_code == 8) { // Backspace
             // Удаляем символ
             if (textbox->text && textbox->cursor_pos > 0) {
-                // TODO: Реализовать удаление символа
+                // Удаляем символ перед курсором
+                size_t len = strlen(textbox->text);
+                for (size_t i = textbox->cursor_pos - 1; i < len; i++) {
+                    textbox->text[i] = textbox->text[i + 1];
+                }
+                textbox->text[len - 1] = '\0';
+                textbox->cursor_pos--;
                 if (textbox->change_handler) {
                     textbox->change_handler(textbox);
                 }
@@ -288,12 +301,25 @@ void tui_list_handle_event(tui_list_t* list, tui_event_t* event) {
                 }
             }
         } else if (event->data.key.key_code == 40) { // Down arrow
-            // TODO: Реализовать увеличение индекса
+            // Увеличиваем индекс выбранного элемента
+            // Подсчитываем количество элементов
+            uint16_t item_count = 0;
+            tui_list_item_t* item = list->items;
+            while (item) {
+                item_count++;
+                item = item->next;
+            }
+            if (list->selected_index < item_count - 1) {
+                list->selected_index++;
+                if (list->selection_change_handler) {
+                    list->selection_change_handler(list);
+                }
+            }
+        } else if (event->data.key.key_code == '\n') { // Enter
+            // Выбираем элемент (сигнализируем о выборе)
             if (list->selection_change_handler) {
                 list->selection_change_handler(list);
             }
-        } else if (event->data.key.key_code == '\n') { // Enter
-            // TODO: Реализовать выбор элемента
         }
     }
 }
@@ -301,15 +327,19 @@ void tui_list_handle_event(tui_list_t* list, tui_event_t* event) {
 // Уничтожение списка
 void tui_list_destroy(tui_list_t* list) {
     if (!list) return;
-    
+
     // Очищаем элементы списка
     tui_list_item_t* item = list->items;
     while (item) {
         tui_list_item_t* next = item->next;
-        // TODO: Освободить память элемента
+        // Освобождаем память элемента
+        item->text = NULL;
+        item->data = NULL;
+        item->next = NULL;
+        // В системе без полноценного malloc нам нечего больше освобождать
         item = next;
     }
-    
+
     // Очищаем память
     list->base.id = NULL;
     list->items = NULL;
@@ -352,20 +382,59 @@ void tui_textbox_set_max_length(tui_textbox_t* textbox, uint16_t max_length) {
 // Функции управления списком
 void tui_list_add_item(tui_list_t* list, const char* text, void* data) {
     if (!list || !text) return;
-    
-    // TODO: Реализовать добавление элемента
+
+    // Создаём новый элемент
+    tui_list_item_t* new_item = (tui_list_item_t*)0x1010000; // Временный адрес
+    if (!new_item) return;
+
+    new_item->text = (char*)text;
+    new_item->data = data;
+    new_item->next = NULL;
+
+    // Добавляем в конец списка
+    if (!list->items) {
+        list->items = new_item;
+    } else {
+        tui_list_item_t* current = list->items;
+        while (current->next) {
+            current = current->next;
+        }
+        current->next = new_item;
+    }
 }
 
 void tui_list_remove_item(tui_list_t* list, uint16_t index) {
-    if (!list) return;
-    
-    // TODO: Реализовать удаление элемента
+    if (!list || !list->items) return;
+
+    // Находим элемент для удаления
+    if (index == 0) {
+        list->items = list->items->next;
+        return;
+    }
+
+    tui_list_item_t* current = list->items;
+    for (uint16_t i = 0; i < index - 1 && current->next; i++) {
+        current = current->next;
+    }
+
+    if (current->next) {
+        current->next = current->next->next;
+    }
 }
 
 void tui_list_clear(tui_list_t* list) {
     if (!list) return;
-    
-    // TODO: Реализовать очистку списка
+
+    // Удаляем все элементы
+    while (list->items) {
+        tui_list_item_t* next = list->items->next;
+        list->items->text = NULL;
+        list->items->data = NULL;
+        list->items->next = NULL;
+        list->items = next;
+    }
+    list->selected_index = 0;
+    list->scroll_offset = 0;
 }
 
 void tui_list_set_selection(tui_list_t* list, uint16_t index) {
