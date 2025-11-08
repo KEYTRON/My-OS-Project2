@@ -65,7 +65,7 @@ void tui_system_cleanup(void) {
     // Уничтожаем все окна
     tui_window_t* window = g_tui_system.windows;
     while (window) {
-        tui_window_t* next = window->base.next;
+        tui_window_t* next = (tui_window_t*)window->base.next;
         tui_destroy_window(window);
         window = next;
     }
@@ -74,7 +74,7 @@ void tui_system_cleanup(void) {
     // Уничтожаем все меню
     tui_menu_t* menu = g_tui_system.menus;
     while (menu) {
-        tui_menu_t* next = menu->base.next;
+        tui_menu_t* next = (tui_menu_t*)menu->base.next;
         tui_destroy_menu(menu);
         menu = next;
     }
@@ -330,6 +330,7 @@ void tui_reset_exit_flag(void) {
 
 // Обработка ввода
 bool tui_is_key_pressed(uint16_t key_code) {
+    (void)key_code;  // Unused parameter
     // Проверяем, есть ли символ в буфере
     return keyboard_head != keyboard_tail;
 }
