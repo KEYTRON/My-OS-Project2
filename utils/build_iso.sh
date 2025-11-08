@@ -1,11 +1,11 @@
 #!/bin/bash
 # build_iso.sh — собирает ISO-образ под BIOS (не UEFI)
 
-# 1) Собираем ядро
-echo "Сборка ядра..."
+# 1) Собираем ядро для x86_64
+echo "Сборка ядра x86_64..."
 cd ../kernel
-make clean
-make all
+make clean ARCH=x86_64
+make ARCH=x86_64
 if [ $? -ne 0 ]; then
     echo "Ошибка сборки ядра!"
     exit 1
@@ -18,8 +18,26 @@ rm -rf $ISO_ROOT
 mkdir -p $ISO_ROOT/boot/grub
 
 # 3) Копируем ядро и конфиг
-cp build/kernel.bin $ISO_ROOT/boot/kernel.bin
-cp ../boot/grub/grub.cfg $ISO_ROOT/boot/grub/grub.cfg
+if [ -f "build/kernel-x86_64.bin" ]; then
+    cp build/kernel-x86_64.bin $ISO_ROOT/boot/kernel.bin
+elif [ -f "build/kernel.bin" ]; then
+    cp build/kernel.bin $ISO_ROOT/boot/kernel.bin
+else
+    echo "Ошибка: kernel binary не найден в build/"
+    exit 1
+fi
+cp include/tui/grub.cfg $ISO_ROOT/boot/grub/grub.cfg 2>/dev/null || cp grub.cfg $ISO_ROOT/boot/grub/grub.cfg 2>/dev/null || {
+    # Создаем базовый grub.cfg если не существует
+    cat > $ISO_ROOT/boot/grub/grub.cfg << 'EOF'
+set timeout=5
+set default=0
+
+menuentry "MyOS x86_64" {
+    multiboot /boot/kernel.bin
+    boot
+}
+EOF
+}
 
 # 4) Собираем ISO (BIOS-режим)
 echo "Создание ISO..."

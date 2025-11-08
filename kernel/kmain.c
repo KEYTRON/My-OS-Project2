@@ -116,18 +116,36 @@ void kernel_main() {
     printf("Interrupts enabled.\n");
     serial_write_string("Interrupts enabled.\n");
 
-    // Приветствие
-    printf("\nПривет! Это минимальное ядро на С/С++.\n");
-    printf("Архитектура: ");
-#ifdef ARCH_X86_64
-    printf("x86_64");
-#elif defined(ARCH_ARM64)
-    printf("ARM64");
-#elif defined(ARCH_RISCV64)
-    printf("RISC-V64");
-#endif
+    // Приветствие с красивым splash screen
     printf("\n");
-    
+    printf("╔════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                                                                        ║\n");
+    printf("║                        ✨ Welcome to MyOS v1.0 ✨                     ║\n");
+    printf("║                                                                        ║\n");
+    printf("║              Educational Operating System for x86_64, ARM64            ║\n");
+    printf("║                          & RISC-V64 Architectures                      ║\n");
+    printf("║                                                                        ║\n");
+    printf("╚════════════════════════════════════════════════════════════════════════╝\n");
+    printf("\n");
+
+    // Информация об архитектуре
+    printf("📌 System Architecture: ");
+#ifdef ARCH_X86_64
+    printf("x86_64 (Intel/AMD)\n");
+#elif defined(ARCH_ARM64)
+    printf("ARM64 (ARMv8)\n");
+#elif defined(ARCH_RISCV64)
+    printf("RISC-V64\n");
+#endif
+
+    printf("📊 Boot Information:\n");
+    printf("   ├─ GDT initialized\n");
+    printf("   ├─ IDT with %d interrupt vectors\n", 256);
+    printf("   ├─ Memory paging enabled\n");
+    printf("   ├─ Virtual memory support active\n");
+    printf("   └─ Keyboard & VGA drivers ready\n");
+    printf("\n");
+
     serial_write_string("Kernel says hello!\n");
 
     // Инициализируем TUI систему

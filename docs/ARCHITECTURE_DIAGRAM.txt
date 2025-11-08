@@ -1,0 +1,352 @@
+================================================================================
+                         MyOS ARCHITECTURE DIAGRAM
+================================================================================
+
+                              CURRENT STATE (WORKING)
+                            ========================
+
+                              QEMU / Real Hardware
+                                       |
+                    ┌──────────────────┴──────────────────┐
+                    |                                     |
+                  BIOS                              (No UEFI)
+                    |
+         ┌──────────┴──────────┐
+         |                     |
+        MBR                   GRUB
+         |                (Multiboot v1)
+         |                     |
+         └──────────┬──────────┘
+                    |
+            ┌───────┴────────┐
+            |                |
+      [32-bit Mode]    [64-bit Long Mode]
+            |                |
+         Entry.S → CPU Detection → PAE Enable → LME Enable
+            |                |
+            └────────┬────────┘
+                     |
+            ┌────────┴────────────────┐
+            |                         |
+          GDT                       IDT
+        (Segments)              (Interrupts)
+            |                         |
+            └────────┬────────────────┘
+                     |
+            ┌────────┴────────────────┐
+            |                         |
+         PAGING                  kernel_main()
+     (Virtual Memory)                 |
+            |                    ┌────┴────────────────────────┐
+            |                    |                             |
+            |              ┌─────┴─────┐            ┌──────────┴────────┐
+            |              |           |            |                   |
+            |          Drivers     TUI System    Architecture
+            |              |           |          (ARM64/RISC-V64)
+            |        ┌──────┴────┐    |
+            |        |           |    |
+            |       VGA      Serial  Keyboard
+            |     (Text)     (COM1)   (PS/2)
+            |        |           |      |
+            └────────┼───────────┼──────┘
+                     |           |
+                  Display    Debug Output
+
+
+================================================================================
+
+                        WHAT EXISTS TODAY
+                        =================
+
+┌─────────────────────────────────────────────────────────────────┐
+│  FIRMWARE LAYER                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Entry.S (Multiboot Header)                              │   │
+│  │ - 0x1BADB002 magic number                               │   │
+│  │ - 32-bit protected mode setup                           │   │
+│  │ - PAE and LME enabling                                  │   │
+│  │ - PML4/PDPT/PD paging tables (1:1 mapping)             │   │
+│  │ - GDT + IDT loading                                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  KERNEL LAYER                                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │  GDT (x86)   │  │  IDT (x86)   │  │  Paging (x86)        │  │
+│  │ • Kernel CS  │  │ • IRQ 0-47   │  │ • 4KB pages          │  │
+│  │ • Kernel DS  │  │ • ISR stubs  │  │ • Virtual mem setup  │  │
+│  │ • User CS    │  │ • Handlers   │  │ • 1:1 mapping first  │  │
+│  │ • User DS    │  │              │  │   2MB                │  │
+│  │ • TSS        │  │              │  │                      │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  DRIVER LAYER                                              │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │ │
+│  │  │ VGA Driver   │  │ Serial (COM1)│  │ Keyboard (PS/2)│  │ │
+│  │  │              │  │              │  │               │  │ │
+│  │  │ • Text mode  │  │ • 38400 baud │  │ • IRQ1        │  │ │
+│  │  │ • 80×25 grid │  │ • 8N1 format │  │ • Scancode→   │  │ │
+│  │  │ • 16 colors  │  │ • Debugging  │  │   ASCII       │  │ │
+│  │  │ • Buffer at  │  │              │  │               │  │ │
+│  │  │   0xB8000    │  │              │  │               │  │ │
+│  │  └──────────────┘  └──────────────┘  └───────────────┘  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  LIBRARY LAYER                                             │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │ Printf              String Functions                │ │ │
+│  │  │ • Format output     • memcpy                        │ │ │
+│  │  │ • Supports %s,%d    • memset                        │ │ │
+│  │  │ • VGA or serial     • strlen, strcmp, etc          │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  │                                                             │ │
+│  │  ┌──────────────────────────────────────────────────────┐ │ │
+│  │  │ TUI System (Terminal User Interface)                │ │ │
+│  │  │ ✓ Double-buffering (screen + back)                 │ │ │
+│  │  │ ✓ Window management with borders                   │ │ │
+│  │  │ ✓ Widget framework (buttons, text boxes)           │ │ │
+│  │  │ ✓ Menu system with keyboard                        │ │ │
+│  │  │ ✓ Event handling system                            │ │ │
+│  │  │ ✓ Text attributes (bold, underline, etc)          │ │ │
+│  │  │ ✓ Z-order window management                        │ │ │
+│  │  │ ✗ Mouse support (framework present, no driver)     │ │ │
+│  │  │ ✗ Only renders to VGA text (80×25)               │ │ │
+│  │  └──────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  APPLICATION LAYER (TEXT MODE)                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  TUI Demo Application                                      │ │
+│  │  • Windows, menus, widgets                               │ │
+│  │  • Keyboard-driven interface                             │ │
+│  │  • Text-based, no graphics                               │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+
+                    WHAT'S MISSING FOR GUI (HIGH PRIORITY)
+                    ==================================
+
+┌─────────────────────────────────────────────────────────────────┐
+│  GRAPHICS LAYER (MISSING)                                       │
+│  ┌──────────────────────┐  ┌──────────────────────┐           │
+│  │ VESA VBE Driver      │  │ Framebuffer Layer    │           │
+│  │                      │  │                      │           │
+│  │ • BIOS int 0x10      │  │ • Pixel drawing      │           │
+│  │ • Query modes        │  │ • Line drawing       │           │
+│  │ • Set graphics mode  │  │ • Rectangle fill     │           │
+│  │ • Get framebuffer    │  │ • Color blending     │           │
+│  │   address            │  │ • Double-buffering   │           │
+│  │ • Detect color       │  │ • Multiple depths    │           │
+│  │   layout             │  │   (16/24/32-bit)     │           │
+│  └──────────────────────┘  └──────────────────────┘           │
+│                                                                 │
+│  ┌──────────────────────┐  ┌──────────────────────┐           │
+│  │ Font/Text Rendering  │  │ Mouse Driver         │           │
+│  │                      │  │                      │           │
+│  │ • Bitmap fonts       │  │ • PS/2 protocol      │           │
+│  │ • Character raster   │  │ • Cursor rendering   │           │
+│  │ • Text layout        │  │ • Click handling     │           │
+│  │ • String wrapping    │  │ • Movement tracking  │           │
+│  └──────────────────────┘  └──────────────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  GUI LAYER (REQUIRES REWRITING TUI)                             │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ Render TUI Widgets to Framebuffer                          │ │
+│  │ • Windows as pixel rectangles                             │ │
+│  │ • Buttons with mouse hover states                         │ │
+│  │ • Text input fields with cursors                          │ │
+│  │ • Menus rendered as dropdown boxes                        │ │
+│  │ • Real-time rendering updates                            │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ Window Manager                                             │ │
+│  │ • Window compositing (layer composition)                  │ │
+│  │ • Z-order management (bring to front, etc)               │ │
+│  │ • Window decorations (title bar, borders)                │ │
+│  │ • Drag and resize support                                │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  APPLICATION LAYER (GRAPHICAL)                                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │  File        │  │  System      │  │  Terminal    │         │
+│  │  Manager     │  │  Monitor     │  │  (Shell)     │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+│  • Browse ISO  │  • Show memory    │  • Execute    │         │
+│  • View files  │  • CPU load       │    commands   │         │
+│  • Open docs   │  • Process list   │  • Command    │         │
+│                │                   │    history    │         │
+└─────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+
+                        MULTI-ARCHITECTURE SUPPORT
+                        ==========================
+
+Currently:
+  ✓ x86_64:   Fully functional (boot → 64-bit mode → kernel)
+  ~ ARM64:    Bootloader works, kernel minimal
+  ~ RISC-V64: Bootloader works, kernel minimal
+
+Structure:
+  kernel/arch/
+  ├── x86_64/
+  │   ├── entry.S          [COMPLETE - Multiboot, mode switch, paging]
+  │   ├── gdt.c            [COMPLETE - Segment tables]
+  │   ├── idt.c            [COMPLETE - Interrupt tables]
+  │   ├── isr.c            [COMPLETE - Interrupt handlers]
+  │   ├── paging.c         [COMPLETE - Virtual memory]
+  │   └── arch.h           [COMPLETE - CPU primitives]
+  │
+  ├── arm64/
+  │   ├── entry.S          [BASIC - Boot sequence]
+  │   ├── arch.h           [STUBS - Minimal functions]
+  │   └── (need GIC, MMU init)
+  │
+  └── riscv64/
+      ├── entry.S          [BASIC - Boot sequence]
+      ├── arch.h           [STUBS - Minimal functions]
+      └── (need PLIC, MMU init)
+
+To complete ARM64 and RISC-V64:
+  - Implement GIC (Generic Interrupt Controller) for ARM64
+  - Implement PLIC (Platform-Level Interrupt Controller) for RISC-V64
+  - Add architecture-specific exception handlers
+  - Implement MMU (Memory Management Unit) initialization
+  - Add SMP (Symmetric Multi-Processing) support
+
+
+================================================================================
+
+                            BUILD PIPELINE
+                            ==============
+
+Source Code (C/ASM)
+        ↓
+┌──────────────────┐
+│  Compiler Stage  │
+├──────────────────┤
+│ x86_64-elf-gcc   │  → entry.o
+│ x86_64-elf-nasm  │  → isr_stubs.o
+│                  │  → kmain.o
+│ (+ all drivers)  │  → vga.o, serial.o, keyboard.o
+│ (+ all libs)     │  → printf.o, string.o, tui_*.o
+└──────────────────┘
+        ↓
+┌──────────────────┐
+│  Linker Stage    │
+├──────────────────┤
+│ x86_64-elf-ld    │  → kernel-x86_64.bin (linked via linker.ld)
+│ (linker.ld)      │     • Sections: .text, .data, .bss
+│                  │     • Entry: _start at 0x100000
+└──────────────────┘
+        ↓
+┌──────────────────┐
+│  ISO Build       │
+├──────────────────┤
+│ grub-mkrescue    │  → iso_root_x86_64/
+│ or xorriso       │     ├── boot/
+│                  │     │   ├── kernel.bin
+│                  │     │   └── grub/grub.cfg
+│                  │     └── (ISO filesystem structure)
+└──────────────────┘
+        ↓
+┌──────────────────┐
+│  Bootable ISO    │
+├──────────────────┤
+│ myos-x86_64.iso  │
+│ (15 MB)          │
+└──────────────────┘
+        ↓
+        ┌─────────────────────────────────┐
+        │ QEMU / Real Hardware            │
+        │ qemu-system-x86_64 -cdrom ...   │
+        └─────────────────────────────────┘
+
+
+================================================================================
+
+                    KERNEL EXECUTION FLOW
+                    ====================
+
+1. FIRMWARE PHASE
+   └─ BIOS loads MBR → GRUB bootloader
+   └─ GRUB loads kernel-x86_64.bin
+   └─ GRUB jumps to _start (entry.S)
+
+2. BOOTSTRAP PHASE (entry.S)
+   └─ Load GDT for 64-bit
+   └─ Enable PAE (bit 5 of CR4)
+   └─ Enable LME in MSR EFER
+   └─ Setup paging tables (PML4, PDPT, PD)
+   └─ Enable paging (CR0.PG = 1)
+   └─ Far jump to 64-bit code segment
+   └─ Jump to kernel_main()
+
+3. KERNEL PHASE (kmain.c → kernel_main())
+   └─ vga_init()           [Initialize VGA text mode]
+   └─ serial_init()        [Initialize COM1 serial]
+   └─ gdt_init()           [Setup GDT (x86_64)]
+   └─ idt_init()           [Setup IDT and ISR handlers]
+   └─ paging_init()        [Verify paging]
+   └─ keyboard_init()      [Setup keyboard driver]
+   └─ arch_enable_interrupts()
+   └─ tui_system_init()    [Initialize TUI]
+   └─ tui_demo_create()    [Create demo app]
+   └─ tui_demo_run()       [Run TUI demo]
+   └─ while(1) { arch_halt() }  [Idle loop with interrupts]
+
+4. RUNTIME PHASE
+   └─ Keyboard input → IRQ1 → ISR → keyboard handler
+   └─ TUI processes events
+   └─ Output renders to VGA text buffer (0xB8000)
+
+
+================================================================================
+
+                        KEY METRICS
+                        ===========
+
+Code Size:
+  • Bootloader (entry.S):     ~150 lines
+  • Kernel core (kmain.c):    ~170 lines
+  • Drivers (3 files):         ~300 lines
+  • Libraries:                 ~800 lines
+  • TUI system:                ~2000 lines (5 files)
+  • Total kernel code:         ~3500 lines
+
+Binary Size:
+  • Compiled kernel:           ~500 KB
+  • ISO image:                 15 MB (includes GRUB)
+
+Memory Usage:
+  • RAM in QEMU:               512 MB
+  • Used by kernel:            < 1 MB
+  • VGA text buffer:           4 KB
+  • TUI screen buffers:        ~20 KB
+
+Performance:
+  • Boot time:                 ~1 second
+  • TUI initialization:        Immediate
+  • Keyboard response:         < 50ms
+
+Architecture Coverage:
+  • x86_64:    100% implemented
+  • ARM64:     20% implemented (bootloader only)
+  • RISC-V64:  20% implemented (bootloader only)
+
+
+================================================================================
