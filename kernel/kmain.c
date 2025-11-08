@@ -30,6 +30,12 @@
 // GUI система
 #include "lib/gui/gui_widgets.h"
 
+// TUI Desktop система (ASCII Terminal User Interface)
+#include "lib/gui/tui_desktop.h"
+
+// GUI Desktop система (Полная графическая оболочка)
+#include "lib/gui/gui_desktop.h"
+
 // Функция, вызываемая из entry.S
 void kernel_main() {
     // Для начала можно поставить громкую точку: ядро запустилось
@@ -349,6 +355,34 @@ void kernel_main() {
     }
 
     // Теперь можно запустить основной цикл
+    // ========================================
+    // Запуск GUI Desktop (Полный графический рабочий стол)
+    // ========================================
+    printf("\n");
+    printf("════════════════════════════════════════════════════════════════════════\n");
+    printf("                   GUI Desktop Environment\n");
+    printf("════════════════════════════════════════════════════════════════════════\n\n");
+
+    // Проверяем наличие графического устройства
+    if (gfx != NULL && gfx->bpp >= 16) {
+        printf("Инициализация полного GUI Desktop...\n");
+        serial_write_string("Initializing full GUI Desktop...\n");
+
+        gui_desktop_run(gfx);
+
+        printf("GUI Desktop успешно запущен!\n");
+        serial_write_string("GUI Desktop started successfully.\n");
+    } else {
+        printf("⚠ Графика недоступна (требуется 16-bit+), запускаем TUI Desktop вместо GUI...\n");
+        serial_write_string("Graphics not available, falling back to TUI...\n");
+
+        printf("Инициализация TUI рабочего стола...\n");
+        tui_desktop_run();
+
+        printf("\nТУИ рабочий стол завершен.\n");
+        serial_write_string("TUI Desktop finished.\n");
+    }
+
     printf("\nEntering main event loop...\n");
     serial_write_string("Entering main event loop.\n");
 
