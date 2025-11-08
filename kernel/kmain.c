@@ -269,7 +269,86 @@ void kernel_main() {
         serial_write_string("Graphics initialization failed.\n");
     }
 
+    // ========================================
+    // Инициализация GUI системы
+    // ========================================
+    printf("\n");
+    printf("════════════════════════════════════════════════════════════════════════\n");
+    printf("                       GUI System Initialization\n");
+    printf("════════════════════════════════════════════════════════════════════════\n\n");
+
+    // Включаем только если графика доступна
+    if (gfx != NULL && gfx->bpp >= 16) {
+        extern void gui_init(void);
+        extern gui_widget_t *gui_window_create(const char *, int32_t, int32_t, uint32_t, uint32_t);
+        extern void gui_widget_add_child(gui_widget_t *, gui_widget_t *);
+        extern gui_widget_t *gui_button_create(const char *);
+        extern void gui_widget_set_bounds(gui_widget_t *, int32_t, int32_t, uint32_t, uint32_t);
+        extern gui_widget_t *gui_label_create(const char *);
+        extern void gui_process_events(void);
+        extern void gui_render(void);
+
+        printf("Initializing GUI system...\n");
+        gui_init();
+        printf("✓ GUI initialized\n\n");
+
+        // Создаем главное окно рабочего стола
+        printf("Creating desktop windows...\n");
+        gui_widget_t *main_window = gui_window_create("MyOS Desktop", 50, 50, 500, 400);
+        if (main_window) {
+            printf("✓ Main window created (500x400)\n");
+
+            // Добавляем кнопку
+            gui_widget_t *btn1 = gui_button_create("Click Me!");
+            if (btn1) {
+                gui_widget_set_bounds(btn1, 20, 80, 100, 30);
+                gui_widget_add_child(main_window, btn1);
+                printf("✓ Button added\n");
+            }
+
+            // Добавляем ярлык
+            gui_widget_t *label = gui_label_create("Welcome to MyOS GUI!");
+            if (label) {
+                gui_widget_set_bounds(label, 20, 50, 200, 16);
+                gui_widget_add_child(main_window, label);
+                printf("✓ Label added\n");
+            }
+        }
+
+        // Создаем второе окно
+        gui_widget_t *info_window = gui_window_create("System Info", 600, 100, 400, 300);
+        if (info_window) {
+            printf("✓ Info window created (400x300)\n");
+
+            gui_widget_t *info_label = gui_label_create("MyOS v1.0 - Graphics & GUI Demo");
+            if (info_label) {
+                gui_widget_set_bounds(info_label, 20, 50, 300, 16);
+                gui_widget_add_child(info_window, info_label);
+            }
+        }
+
+        printf("\n✓ All GUI components initialized\n");
+
+        // Рисуем синий фон рабочего стола
+        uint32_t blue = graphics_rgb_to_color(20, 20, 60);
+        graphics_clear(blue);
+
+        // Рисуем элементы GUI
+        printf("Rendering GUI...\n");
+        gui_render();
+        graphics_flush();
+        printf("✓ GUI rendered to framebuffer\n");
+
+        serial_write_string("GUI system initialized and rendered.\n");
+    } else {
+        printf("⚠ GUI system requires 16-bit or higher color graphics\n");
+        printf("⚠ Skipping GUI initialization in text mode\n");
+    }
+
     // Теперь можно запустить основной цикл
+    printf("\nEntering main event loop...\n");
+    serial_write_string("Entering main event loop.\n");
+
     while (1) {
         arch_halt(); // при отсутствии задач простаиваем, пока прерывание не придёт
     }
