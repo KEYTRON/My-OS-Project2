@@ -65,7 +65,7 @@ void tui_system_cleanup(void) {
     // Уничтожаем все окна
     tui_window_t* window = g_tui_system.windows;
     while (window) {
-        tui_window_t* next = window->base.next;
+        tui_window_t* next = (tui_window_t*)window->base.next;
         tui_destroy_window(window);
         window = next;
     }
@@ -74,7 +74,7 @@ void tui_system_cleanup(void) {
     // Уничтожаем все меню
     tui_menu_t* menu = g_tui_system.menus;
     while (menu) {
-        tui_menu_t* next = menu->base.next;
+        tui_menu_t* next = (tui_menu_t*)menu->base.next;
         tui_destroy_menu(menu);
         menu = next;
     }
@@ -173,7 +173,8 @@ void tui_set_cursor_pos(tui_pos_t pos) {
 
     g_tui_system.cursor_pos = pos;
 
-    // Обновляем VGA курсор через port I/O (VGA CRTC)
+    // Обновляем VGA курсор через port I/O (VGA CRTC) - только на x86_64
+#ifdef __x86_64__
     uint16_t offset = pos.y * g_tui_system.screen_size.width + pos.x;
     // Устанавливаем высокий байт смещения курсора
     __asm__ __volatile__("outb %%al, $0x3D4" : : "a"(0x0E));
@@ -181,6 +182,7 @@ void tui_set_cursor_pos(tui_pos_t pos) {
     // Устанавливаем низкий байт смещения курсора
     __asm__ __volatile__("outb %%al, $0x3D4" : : "a"(0x0F));
     __asm__ __volatile__("outb %%al, $0x3D5" : : "a"(offset & 0xFF));
+#endif
 }
 
 // Показать/скрыть курсор
@@ -190,11 +192,13 @@ void tui_show_cursor(bool show) {
         tui_set_cursor_pos(g_tui_system.cursor_pos);
     } else {
         // Скрываем курсор (ставим в невидимую позицию - за границу экрана)
+#ifdef __x86_64__
         uint16_t offset = g_tui_system.screen_size.width * g_tui_system.screen_size.height;
         __asm__ __volatile__("outb %%al, $0x3D4" : : "a"(0x0E));
         __asm__ __volatile__("outb %%al, $0x3D5" : : "a"((offset >> 8) & 0xFF));
         __asm__ __volatile__("outb %%al, $0x3D4" : : "a"(0x0F));
         __asm__ __volatile__("outb %%al, $0x3D5" : : "a"(offset & 0xFF));
+#endif
     }
 }
 
@@ -330,6 +334,7 @@ void tui_reset_exit_flag(void) {
 
 // Обработка ввода
 bool tui_is_key_pressed(uint16_t key_code) {
+    (void)key_code;  // Unused parameter
     // Проверяем, есть ли символ в буфере
     return keyboard_head != keyboard_tail;
 }

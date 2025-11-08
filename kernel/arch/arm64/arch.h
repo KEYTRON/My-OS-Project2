@@ -30,15 +30,16 @@ typedef uint32_t arm64_inst_t;
 #define ARM64_DAIF_F  (1 << 6)
 
 // Функции для работы с системными регистрами
-static inline arm64_reg_t arm64_read_sysreg(const char* reg) {
-    arm64_reg_t val;
-    asm volatile("mrs %0, " reg : "=r"(val));
-    return val;
-}
+// Примечание: ARM64 system registers должны быть известны во время компиляции
+// Используйте ARM64_MPIDR_EL1 и другие константы вместо строк
 
-static inline void arm64_write_sysreg(const char* reg, arm64_reg_t val) {
-    asm volatile("msr " reg ", %0" : : "r"(val));
-}
+// Макро для чтения system register
+#define ARM64_READ_SYSREG(reg, var) \
+    asm volatile("mrs %0, " #reg : "=r"(var) : : "memory")
+
+// Макро для записи в system register
+#define ARM64_WRITE_SYSREG(reg, var) \
+    asm volatile("msr " #reg ", %0" : : "r"(var) : "memory")
 
 // Функции для работы с прерываниями
 static inline void arm64_disable_irq(void) {

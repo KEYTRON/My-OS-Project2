@@ -1,0 +1,14 @@
+========================================
+      Welcome to MyOS v1.0
+   Desktop Operating System
+========================================
+
+Architecture: ARM64 (ARMv8)
+Platform: Multi-Architecture
+GUI: Native Widget Framework
+Bootloader: GRUB2
+
+This is a Live-CD environment.
+All data is in RAM - changes will be lost on reboot.
+
+For more information, see /etc/os-release

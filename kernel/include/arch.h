@@ -2,7 +2,7 @@
 #define ARCH_H
 
 // Определяем архитектуру на этапе компиляции
-#if defined(__x86_64__) || defined(__amd64__)
+#if defined(__x86_64__) || defined(__amd64__) || (defined(__i386__) && !defined(__INTEL_COMPILER__))
     #define ARCH_X86_64
     #include "../arch/x86_64/arch.h"
     typedef x86_64_reg_t arch_reg_t;

@@ -23,6 +23,19 @@
 #include "include/tui/tui.h"
 #include "include/tui/tui_demo.h"
 
+// Graphics система
+#include "lib/graphics/graphics.h"
+#include "lib/graphics/graphics_font.h"
+
+// GUI система
+#include "lib/gui/gui_widgets.h"
+
+// TUI Desktop система (ASCII Terminal User Interface)
+#include "lib/gui/tui_desktop.h"
+
+// GUI Desktop система (Полная графическая оболочка)
+#include "lib/gui/gui_desktop.h"
+
 // Функция, вызываемая из entry.S
 void kernel_main() {
     // Для начала можно поставить громкую точку: ядро запустилось
@@ -116,18 +129,36 @@ void kernel_main() {
     printf("Interrupts enabled.\n");
     serial_write_string("Interrupts enabled.\n");
 
-    // Приветствие
-    printf("\nПривет! Это минимальное ядро на С/С++.\n");
-    printf("Архитектура: ");
-#ifdef ARCH_X86_64
-    printf("x86_64");
-#elif defined(ARCH_ARM64)
-    printf("ARM64");
-#elif defined(ARCH_RISCV64)
-    printf("RISC-V64");
-#endif
+    // Приветствие с красивым splash screen
     printf("\n");
-    
+    printf("╔════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                                                                        ║\n");
+    printf("║                        ✨ Welcome to MyOS v1.0 ✨                     ║\n");
+    printf("║                                                                        ║\n");
+    printf("║              Educational Operating System for x86_64, ARM64            ║\n");
+    printf("║                          & RISC-V64 Architectures                      ║\n");
+    printf("║                                                                        ║\n");
+    printf("╚════════════════════════════════════════════════════════════════════════╝\n");
+    printf("\n");
+
+    // Информация об архитектуре
+    printf("📌 System Architecture: ");
+#ifdef ARCH_X86_64
+    printf("x86_64 (Intel/AMD)\n");
+#elif defined(ARCH_ARM64)
+    printf("ARM64 (ARMv8)\n");
+#elif defined(ARCH_RISCV64)
+    printf("RISC-V64\n");
+#endif
+
+    printf("📊 Boot Information:\n");
+    printf("   ├─ GDT initialized\n");
+    printf("   ├─ IDT with %d interrupt vectors\n", 256);
+    printf("   ├─ Memory paging enabled\n");
+    printf("   ├─ Virtual memory support active\n");
+    printf("   └─ Keyboard & VGA drivers ready\n");
+    printf("\n");
+
     serial_write_string("Kernel says hello!\n");
 
     // Инициализируем TUI систему
@@ -163,8 +194,198 @@ void kernel_main() {
     // Возврат к консольному режиму
     printf("\nВозврат к консольному режиму...\n");
     serial_write_string("Returning to console mode...\n");
-    
+
+    // ========================================
+    // Инициализация и демонстрация графики
+    // ========================================
+    printf("\n");
+    printf("════════════════════════════════════════════════════════════════════════\n");
+    printf("                     Graphics System Demonstration\n");
+    printf("════════════════════════════════════════════════════════════════════════\n");
+
+    printf("\nInitializing graphics subsystem...\n");
+    serial_write_string("Initializing graphics subsystem...\n");
+
+    graphics_device_t *gfx = graphics_init();
+    if (gfx != NULL) {
+        printf("✓ Graphics initialized: %ux%u @ %ubpp\n", gfx->width, gfx->height, gfx->bpp);
+        printf("  Mode: ");
+
+        switch (gfx->mode) {
+            case GRAPHICS_MODE_TEXT:
+                printf("Text Mode");
+                break;
+            case GRAPHICS_MODE_VESA:
+                printf("VESA VBE 3.0 (x86_64)");
+                break;
+            case GRAPHICS_MODE_FB_32:
+                printf("32-bit Framebuffer");
+                break;
+            case GRAPHICS_MODE_FB_16:
+                printf("16-bit Framebuffer");
+                break;
+            default:
+                printf("Unknown");
+        }
+        printf("\n");
+        serial_write_string("Graphics initialized successfully.\n");
+
+        // Проверяем возможность рендеринга
+        if (gfx->putpixel != NULL && gfx->bpp >= 16) {
+            printf("\nRendering graphics demo...\n");
+
+            // Очищаем экран черным цветом
+            uint32_t black = graphics_rgb_to_color(0, 0, 0);
+            graphics_clear(black);
+
+            // Рисуем красный прямоугольник в углу
+            uint32_t red = graphics_rgb_to_color(255, 0, 0);
+            graphics_rect_t rect1 = {.x = 50, .y = 50, .width = 200, .height = 150};
+            graphics_fillrect(rect1, red);
+
+            // Рисуем зеленый прямоугольник
+            uint32_t green = graphics_rgb_to_color(0, 255, 0);
+            graphics_rect_t rect2 = {.x = 300, .y = 100, .width = 150, .height = 200};
+            graphics_fillrect(rect2, green);
+
+            // Рисуем синий круг
+            uint32_t blue = graphics_rgb_to_color(0, 0, 255);
+            graphics_point_t center = {.x = 700, .y = 300};
+            graphics_drawcircle(center, 80, blue);
+
+            // Рисуем белую линию
+            uint32_t white = graphics_rgb_to_color(255, 255, 255);
+            graphics_point_t p1 = {.x = 100, .y = 400};
+            graphics_point_t p2 = {.x = 900, .y = 500};
+            graphics_drawline(p1, p2, white);
+
+            // Пытаемся вывести текст если поддерживается шрифт
+            uint32_t yellow = graphics_rgb_to_color(255, 255, 0);
+            graphics_draw_string_at(100, 600, "MyOS Graphics Demo v1.0", yellow, black);
+            graphics_draw_string_at(100, 620, "Press any key to continue...", yellow, black);
+
+            graphics_flush();
+            printf("✓ Graphics demo rendered\n");
+            serial_write_string("Graphics demo rendered.\n");
+
+            // Ждем нажатия клавиши
+            printf("\nWaiting for keyboard input...\n");
+        } else {
+            printf("Graphics rendering not available in this mode.\n");
+        }
+    } else {
+        printf("✗ Graphics initialization failed\n");
+        serial_write_string("Graphics initialization failed.\n");
+    }
+
+    // ========================================
+    // Инициализация GUI системы
+    // ========================================
+    printf("\n");
+    printf("════════════════════════════════════════════════════════════════════════\n");
+    printf("                       GUI System Initialization\n");
+    printf("════════════════════════════════════════════════════════════════════════\n\n");
+
+    // Включаем только если графика доступна
+    if (gfx != NULL && gfx->bpp >= 16) {
+        extern void gui_init(void);
+        extern gui_widget_t *gui_window_create(const char *, int32_t, int32_t, uint32_t, uint32_t);
+        extern void gui_widget_add_child(gui_widget_t *, gui_widget_t *);
+        extern gui_widget_t *gui_button_create(const char *);
+        extern void gui_widget_set_bounds(gui_widget_t *, int32_t, int32_t, uint32_t, uint32_t);
+        extern gui_widget_t *gui_label_create(const char *);
+        extern void gui_process_events(void);
+        extern void gui_render(void);
+
+        printf("Initializing GUI system...\n");
+        gui_init();
+        printf("✓ GUI initialized\n\n");
+
+        // Создаем главное окно рабочего стола
+        printf("Creating desktop windows...\n");
+        gui_widget_t *main_window = gui_window_create("MyOS Desktop", 50, 50, 500, 400);
+        if (main_window) {
+            printf("✓ Main window created (500x400)\n");
+
+            // Добавляем кнопку
+            gui_widget_t *btn1 = gui_button_create("Click Me!");
+            if (btn1) {
+                gui_widget_set_bounds(btn1, 20, 80, 100, 30);
+                gui_widget_add_child(main_window, btn1);
+                printf("✓ Button added\n");
+            }
+
+            // Добавляем ярлык
+            gui_widget_t *label = gui_label_create("Welcome to MyOS GUI!");
+            if (label) {
+                gui_widget_set_bounds(label, 20, 50, 200, 16);
+                gui_widget_add_child(main_window, label);
+                printf("✓ Label added\n");
+            }
+        }
+
+        // Создаем второе окно
+        gui_widget_t *info_window = gui_window_create("System Info", 600, 100, 400, 300);
+        if (info_window) {
+            printf("✓ Info window created (400x300)\n");
+
+            gui_widget_t *info_label = gui_label_create("MyOS v1.0 - Graphics & GUI Demo");
+            if (info_label) {
+                gui_widget_set_bounds(info_label, 20, 50, 300, 16);
+                gui_widget_add_child(info_window, info_label);
+            }
+        }
+
+        printf("\n✓ All GUI components initialized\n");
+
+        // Рисуем синий фон рабочего стола
+        uint32_t blue = graphics_rgb_to_color(20, 20, 60);
+        graphics_clear(blue);
+
+        // Рисуем элементы GUI
+        printf("Rendering GUI...\n");
+        gui_render();
+        graphics_flush();
+        printf("✓ GUI rendered to framebuffer\n");
+
+        serial_write_string("GUI system initialized and rendered.\n");
+    } else {
+        printf("⚠ GUI system requires 16-bit or higher color graphics\n");
+        printf("⚠ Skipping GUI initialization in text mode\n");
+    }
+
     // Теперь можно запустить основной цикл
+    // ========================================
+    // Запуск GUI Desktop (Полный графический рабочий стол)
+    // ========================================
+    printf("\n");
+    printf("════════════════════════════════════════════════════════════════════════\n");
+    printf("                   GUI Desktop Environment\n");
+    printf("════════════════════════════════════════════════════════════════════════\n\n");
+
+    // Проверяем наличие графического устройства
+    if (gfx != NULL && gfx->bpp >= 16) {
+        printf("Инициализация полного GUI Desktop...\n");
+        serial_write_string("Initializing full GUI Desktop...\n");
+
+        gui_desktop_run(gfx);
+
+        printf("GUI Desktop успешно запущен!\n");
+        serial_write_string("GUI Desktop started successfully.\n");
+    } else {
+        printf("⚠ Графика недоступна (требуется 16-bit+), запускаем TUI Desktop вместо GUI...\n");
+        serial_write_string("Graphics not available, falling back to TUI...\n");
+
+        printf("Инициализация TUI рабочего стола...\n");
+        tui_desktop_run();
+
+        printf("\nТУИ рабочий стол завершен.\n");
+        serial_write_string("TUI Desktop finished.\n");
+    }
+
+    printf("\nEntering main event loop...\n");
+    serial_write_string("Entering main event loop.\n");
+
     while (1) {
         arch_halt(); // при отсутствии задач простаиваем, пока прерывание не придёт
     }

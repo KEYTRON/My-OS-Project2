@@ -1,5 +1,8 @@
 // keyboard.c — простой обработчик клавиатуры
 #include "keyboard.h"
+
+#if defined(__x86_64__) || defined(__amd64__) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
+// Real x86 keyboard handling
 #include "../arch/x86_64/isr.h"
 #include "../arch/x86_64/idt.h"
 #include "../drivers/vga.h"
@@ -22,9 +25,21 @@ void keyboard_init() {
 }
 
 // Функция-обработчик: считываем scancode и печатаем на экран
+static void inline_keyboard_read(uint8_t *scancode) {
+    // Read from port 0x60 using inline assembly
+    unsigned char val;
+    asm volatile("inb $0x60, %0" : "=a" (val));
+    *scancode = val;
+}
+
+static void inline_keyboard_eoi(void) {
+    // Send EOI (End of Interrupt) to PIC
+    asm volatile("outb %0, $0x20" : : "a" ((unsigned char)0x20));
+}
+
 void keyboard_callback() {
-    uint8_t scancode;
-    asm volatile("inb %1, %0" : "=a"(scancode) : "Nd"(PORT_KEYDATA));
+    uint8_t scancode = 0;
+    inline_keyboard_read(&scancode);
 
     if (scancode < 128) {
         char c = keymap[scancode];
@@ -35,5 +50,18 @@ void keyboard_callback() {
     }
 
     // EOI для PIC
-    asm volatile("movb $0x20, %%al; outb %%al, $0x20" : : : "al");
+    inline_keyboard_eoi();
 }
+
+#else
+// Stub implementation for non-x86 platforms
+
+void keyboard_init() {
+    // No-op on non-x86 platforms
+}
+
+void keyboard_callback() {
+    // No-op on non-x86 platforms
+}
+
+#endif

@@ -1,6 +1,12 @@
 build/
 os-image.bin
 src/bootloader/boot.bin
+*.iso
+iso_root/
+myos.iso
+kernel/iso_root/
+kernel/myos.iso
+utils/iso_root/
 
 # macOS
 .DS_Store

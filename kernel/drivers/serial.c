@@ -3,6 +3,19 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// Port I/O using inline assembly (x86_64 specific)
+// Note: On non-x86 platforms or when compiling for emulation, these become no-ops
+
+#if defined(__x86_64__) || defined(__amd64__) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
+    // Real x86 port I/O
+    #define HAVE_PORT_IO 1
+#else
+    // No native port I/O support
+    #define HAVE_PORT_IO 0
+#endif
+
+#if HAVE_PORT_IO
+
 // Порты COM1
 #define COM1_PORT 0x3F8
 #define COM1_DATA COM1_PORT
@@ -14,13 +27,17 @@
 
 // Вспомогательная функция для отправки команд в порты
 static inline void outb(uint16_t port, uint8_t val) {
-    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+    // Using naked inline asm syntax compatible with both GCC and Clang
+    register uint8_t al asm("al") = val;
+    register uint16_t dx asm("dx") = port;
+    asm volatile("outb %%al, %%dx" : : "r"(al), "r"(dx));
 }
 
 // Вспомогательная функция для чтения из портов
 static inline uint8_t inb(uint16_t port) {
     uint8_t ret;
-    asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    register uint16_t dx asm("dx") = port;
+    asm volatile("inb %%dx, %%al" : "=a"(ret) : "r"(dx));
     return ret;
 }
 
@@ -28,16 +45,16 @@ static inline uint8_t inb(uint16_t port) {
 void serial_init() {
     // Отключаем прерывания
     outb(COM1_INT_ENABLE, 0x00);
-    
+
     // Устанавливаем скорость 38400 baud (делитель 3)
     outb(COM1_LINE_CONTROL, 0x80);  // DLAB = 1
     outb(COM1_DATA, 0x03);          // Младший байт делителя
     outb(COM1_INT_ENABLE, 0x00);    // Старший байт делителя
     outb(COM1_LINE_CONTROL, 0x03);  // DLAB = 0, 8 бит данных, 1 стоп-бит, без четности
-    
+
     // Включаем FIFO
     outb(COM1_FIFO_CONTROL, 0xC7);
-    
+
     // Включаем DTR, RTS и OUT2
     outb(COM1_MODEM_CONTROL, 0x0B);
 }
@@ -46,7 +63,7 @@ void serial_init() {
 void serial_write_char(char c) {
     // Ждем, пока буфер передачи не освободится
     while ((inb(COM1_LINE_STATUS) & 0x20) == 0);
-    
+
     // Отправляем символ
     outb(COM1_DATA, c);
 }
@@ -57,3 +74,22 @@ void serial_write_string(const char* str) {
         serial_write_char(str[i]);
     }
 }
+
+#else
+// Stub implementations for non-x86 platforms
+
+void serial_init() {
+    // No-op on non-x86 platforms
+}
+
+void serial_write_char(char c) {
+    (void)c;  // Suppress unused parameter warning
+    // No-op on non-x86 platforms
+}
+
+void serial_write_string(const char* str) {
+    (void)str;  // Suppress unused parameter warning
+    // No-op on non-x86 platforms
+}
+
+#endif
