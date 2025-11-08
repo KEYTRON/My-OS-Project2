@@ -1,0 +1,15 @@
+#!/bin/sh
+# Minimal shell
+echo "MyOS Shell v1.0"
+while true; do
+    echo -n "myos> "
+    read -r cmd
+    case "$cmd" in
+        exit|quit) break ;;
+        help) echo "Commands: ls, pwd, echo, help, exit" ;;
+        ls) echo "bin  sbin  lib  etc  home  usr  dev  proc  sys  tmp" ;;
+        pwd) echo "/" ;;
+        echo*) echo "${cmd#echo }" ;;
+        *) echo "Unknown command: $cmd" ;;
+    esac
+done

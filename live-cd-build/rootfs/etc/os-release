@@ -1,0 +1,9 @@
+NAME="MyOS"
+VERSION="1.0"
+ID=myos
+ID_LIKE=linux
+PRETTY_NAME="MyOS v1.0 Desktop Live-CD"
+VERSION_ID=1.0
+HOME_URL="https://github.com/keytron46/MyOS"
+SUPPORT_URL="https://github.com/keytron46/MyOS/issues"
+LOGO=myos

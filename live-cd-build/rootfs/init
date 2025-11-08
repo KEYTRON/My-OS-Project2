@@ -1,0 +1,20 @@
+#!/bin/sh
+# MyOS Live-CD init system
+echo "MyOS v1.0 booting..."
+echo "Mounting filesystems..."
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs dev /dev
+
+echo ""
+echo "=========================================="
+echo "  MyOS v1.0 - Desktop Live-CD"
+echo "=========================================="
+echo ""
+echo "System started successfully!"
+echo ""
+echo "Type 'help' for available commands"
+echo ""
+
+# Shell prompt
+exec /bin/sh
