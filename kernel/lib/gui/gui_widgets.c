@@ -4,8 +4,38 @@
 
 #include "gui_widgets.h"
 #include "../graphics/graphics_primitives.h"
-#include "../memory/memory.h"
-#include <string.h>
+#include "../graphics/graphics.h"
+#include "../graphics/graphics_font.h"
+#include "../string.h"
+
+/* str_ncpy implementation since we're in freestanding mode */
+static void str_ncpy(char *dst, const char *src, uint32_t n) {
+    while (n > 0 && *src) {
+        *dst++ = *src++;
+        n--;
+    }
+    if (n > 0) *dst = '\0';
+}
+
+/* Simple memory allocation stub - for now use stack or globals */
+void *kmalloc(uint32_t size) {
+    /* TODO: Implement proper kernel malloc */
+    static uint8_t heap[65536];
+    static uint32_t heap_pos = 0;
+
+    if (heap_pos + size > sizeof(heap)) {
+        return NULL;
+    }
+
+    void *ptr = &heap[heap_pos];
+    heap_pos += size;
+    return ptr;
+}
+
+void kfree(void *ptr) {
+    /* TODO: Implement proper kernel free */
+    (void)ptr;
+}
 
 /* Global GUI state */
 static struct {
@@ -190,34 +220,34 @@ static void window_paint(gui_widget_t *w) {
     if (!data) return;
 
     /* Draw window background */
-    graphics_fill_rect(w->bounds.x, w->bounds.y, w->bounds.width, w->bounds.height,
-                       w->background_color);
+    graphics_rect_t bg = {w->bounds.x, w->bounds.y, w->bounds.width, w->bounds.height};
+    graphics_fillrect(bg, w->background_color);
 
     /* Draw title bar */
-    graphics_fill_rect(w->bounds.x, w->bounds.y, w->bounds.width, data->title_height,
-                       0xFF404080);  /* Blue-gray */
+    graphics_rect_t titlebar = {w->bounds.x, w->bounds.y, w->bounds.width, data->title_height};
+    graphics_fillrect(titlebar, 0xFF404080);  /* Blue-gray */
 
     /* Draw title text */
     if (w->flags & WIDGET_FOCUSED) {
-        graphics_draw_string_at(w->bounds.x + 8, w->bounds.y + 5, data->title,
-                                COLOR_WHITE);
+        graphics_draw_string_at(w->bounds.x + 8, w->bounds.y + 5, data->title, COLOR_WHITE, 0xFF404080);
     } else {
-        graphics_draw_string_at(w->bounds.x + 8, w->bounds.y + 5, data->title,
-                                0xFFAAAAAA);  /* Gray */
+        graphics_draw_string_at(w->bounds.x + 8, w->bounds.y + 5, data->title, 0xFFAAAAAA, 0xFF404080);
     }
 
     /* Draw window border */
     if (w->border_width > 0) {
-        graphics_draw_rect(w->bounds.x, w->bounds.y, w->bounds.width, w->bounds.height,
-                           w->border_color);
+        graphics_point_t p1 = {w->bounds.x, w->bounds.y};
+        graphics_point_t p2 = {w->bounds.x + (int32_t)w->bounds.width, w->bounds.y};
+        graphics_drawline(p1, p2, w->border_color);
     }
 
     /* Draw close button if enabled */
     if (data->has_close_btn) {
         int32_t btn_x = w->bounds.x + w->bounds.width - 20;
         int32_t btn_y = w->bounds.y + 4;
-        graphics_fill_rect(btn_x, btn_y, 16, 16, 0xFFCC0000);  /* Red */
-        graphics_draw_string_at(btn_x + 3, btn_y + 2, "X", COLOR_WHITE);
+        graphics_rect_t btn_rect = {btn_x, btn_y, 16, 16};
+        graphics_fillrect(btn_rect, 0xFFCC0000);  /* Red */
+        graphics_draw_string_at(btn_x + 3, btn_y + 2, "X", COLOR_WHITE, 0xFFCC0000);
     }
 }
 
@@ -291,7 +321,7 @@ gui_widget_t *gui_window_create(const char *title,
     }
 
     memset(data, 0, sizeof(window_data_t));
-    strncpy(data->title, title, sizeof(data->title) - 1);
+    str_ncpy(data->title, title, sizeof(data->title) - 1);
     data->title_height = 24;
     data->has_close_btn = true;
     data->has_minimize_btn = false;
@@ -319,7 +349,7 @@ void gui_window_set_title(gui_widget_t *window, const char *title) {
     window_data_t *data = (window_data_t *)window->data;
     if (!data) return;
 
-    strncpy(data->title, title, sizeof(data->title) - 1);
+    str_ncpy(data->title, title, sizeof(data->title) - 1);
     gui_widget_invalidate(window);
 }
 
@@ -388,17 +418,18 @@ static void button_paint(gui_widget_t *w) {
         bg_color = DEFAULT_BTN_ACTIVE;
     }
 
-    graphics_fill_rect(w->bounds.x, w->bounds.y, w->bounds.width, w->bounds.height,
-                       bg_color);
+    graphics_rect_t btn_rect = {w->bounds.x, w->bounds.y, w->bounds.width, w->bounds.height};
+    graphics_fillrect(btn_rect, bg_color);
 
     /* Draw button border */
-    graphics_draw_rect(w->bounds.x, w->bounds.y, w->bounds.width, w->bounds.height,
-                       COLOR_GRAY);
+    graphics_point_t tl = {w->bounds.x, w->bounds.y};
+    graphics_point_t tr = {w->bounds.x + (int32_t)w->bounds.width, w->bounds.y};
+    graphics_drawline(tl, tr, COLOR_GRAY);
 
     /* Draw button text */
-    int32_t text_x = w->bounds.x + (w->bounds.width / 2) - 20;  /* Approximate centering */
+    int32_t text_x = w->bounds.x + (w->bounds.width / 2) - 20;
     int32_t text_y = w->bounds.y + (w->bounds.height / 2) - 4;
-    graphics_draw_string_at(text_x, text_y, data->text, data->text_color);
+    graphics_draw_string_at(text_x, text_y, data->text, data->text_color, bg_color);
 }
 
 static void button_on_event(gui_widget_t *w, gui_event_t *e) {
@@ -440,7 +471,7 @@ gui_widget_t *gui_button_create(const char *text) {
     }
 
     memset(data, 0, sizeof(button_data_t));
-    strncpy(data->text, text, sizeof(data->text) - 1);
+    str_ncpy(data->text, text, sizeof(data->text) - 1);
     data->text_color = COLOR_WHITE;
 
     w->data = data;
@@ -461,7 +492,7 @@ void gui_button_set_text(gui_widget_t *button, const char *text) {
     button_data_t *data = (button_data_t *)button->data;
     if (!data) return;
 
-    strncpy(data->text, text, sizeof(data->text) - 1);
+    str_ncpy(data->text, text, sizeof(data->text) - 1);
     gui_widget_invalidate(button);
 }
 
@@ -479,7 +510,7 @@ static void label_paint(gui_widget_t *w) {
     label_data_t *data = (label_data_t *)w->data;
     if (!data) return;
 
-    graphics_draw_string_at(w->bounds.x, w->bounds.y, data->text, data->text_color);
+    graphics_draw_string_at(w->bounds.x, w->bounds.y, data->text, data->text_color, COLOR_BLACK);
 }
 
 gui_widget_t *gui_label_create(const char *text) {
@@ -493,7 +524,7 @@ gui_widget_t *gui_label_create(const char *text) {
     }
 
     memset(data, 0, sizeof(label_data_t));
-    strncpy(data->text, text, sizeof(data->text) - 1);
+    str_ncpy(data->text, text, sizeof(data->text) - 1);
     data->text_color = COLOR_WHITE;
 
     w->data = data;
@@ -514,7 +545,7 @@ void gui_label_set_text(gui_widget_t *label, const char *text) {
     label_data_t *data = (label_data_t *)label->data;
     if (!data) return;
 
-    strncpy(data->text, text, sizeof(data->text) - 1);
+    str_ncpy(data->text, text, sizeof(data->text) - 1);
     gui_widget_invalidate(label);
 }
 

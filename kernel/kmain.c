@@ -27,6 +27,9 @@
 #include "lib/graphics/graphics.h"
 #include "lib/graphics/graphics_font.h"
 
+// GUI система
+#include "lib/gui/gui_widgets.h"
+
 // Функция, вызываемая из entry.S
 void kernel_main() {
     // Для начала можно поставить громкую точку: ядро запустилось
