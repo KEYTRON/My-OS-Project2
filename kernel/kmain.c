@@ -23,6 +23,10 @@
 #include "include/tui/tui.h"
 #include "include/tui/tui_demo.h"
 
+// Graphics система
+#include "lib/graphics/graphics.h"
+#include "lib/graphics/graphics_font.h"
+
 // Функция, вызываемая из entry.S
 void kernel_main() {
     // Для начала можно поставить громкую точку: ядро запустилось
@@ -181,7 +185,90 @@ void kernel_main() {
     // Возврат к консольному режиму
     printf("\nВозврат к консольному режиму...\n");
     serial_write_string("Returning to console mode...\n");
-    
+
+    // ========================================
+    // Инициализация и демонстрация графики
+    // ========================================
+    printf("\n");
+    printf("════════════════════════════════════════════════════════════════════════\n");
+    printf("                     Graphics System Demonstration\n");
+    printf("════════════════════════════════════════════════════════════════════════\n");
+
+    printf("\nInitializing graphics subsystem...\n");
+    serial_write_string("Initializing graphics subsystem...\n");
+
+    graphics_device_t *gfx = graphics_init();
+    if (gfx != NULL) {
+        printf("✓ Graphics initialized: %ux%u @ %ubpp\n", gfx->width, gfx->height, gfx->bpp);
+        printf("  Mode: ");
+
+        switch (gfx->mode) {
+            case GRAPHICS_MODE_TEXT:
+                printf("Text Mode");
+                break;
+            case GRAPHICS_MODE_VESA:
+                printf("VESA VBE 3.0 (x86_64)");
+                break;
+            case GRAPHICS_MODE_FB_32:
+                printf("32-bit Framebuffer");
+                break;
+            case GRAPHICS_MODE_FB_16:
+                printf("16-bit Framebuffer");
+                break;
+            default:
+                printf("Unknown");
+        }
+        printf("\n");
+        serial_write_string("Graphics initialized successfully.\n");
+
+        // Проверяем возможность рендеринга
+        if (gfx->putpixel != NULL && gfx->bpp >= 16) {
+            printf("\nRendering graphics demo...\n");
+
+            // Очищаем экран черным цветом
+            uint32_t black = graphics_rgb_to_color(0, 0, 0);
+            graphics_clear(black);
+
+            // Рисуем красный прямоугольник в углу
+            uint32_t red = graphics_rgb_to_color(255, 0, 0);
+            graphics_rect_t rect1 = {.x = 50, .y = 50, .width = 200, .height = 150};
+            graphics_fillrect(rect1, red);
+
+            // Рисуем зеленый прямоугольник
+            uint32_t green = graphics_rgb_to_color(0, 255, 0);
+            graphics_rect_t rect2 = {.x = 300, .y = 100, .width = 150, .height = 200};
+            graphics_fillrect(rect2, green);
+
+            // Рисуем синий круг
+            uint32_t blue = graphics_rgb_to_color(0, 0, 255);
+            graphics_point_t center = {.x = 700, .y = 300};
+            graphics_drawcircle(center, 80, blue);
+
+            // Рисуем белую линию
+            uint32_t white = graphics_rgb_to_color(255, 255, 255);
+            graphics_point_t p1 = {.x = 100, .y = 400};
+            graphics_point_t p2 = {.x = 900, .y = 500};
+            graphics_drawline(p1, p2, white);
+
+            // Пытаемся вывести текст если поддерживается шрифт
+            uint32_t yellow = graphics_rgb_to_color(255, 255, 0);
+            graphics_draw_string_at(100, 600, "MyOS Graphics Demo v1.0", yellow, black);
+            graphics_draw_string_at(100, 620, "Press any key to continue...", yellow, black);
+
+            graphics_flush();
+            printf("✓ Graphics demo rendered\n");
+            serial_write_string("Graphics demo rendered.\n");
+
+            // Ждем нажатия клавиши
+            printf("\nWaiting for keyboard input...\n");
+        } else {
+            printf("Graphics rendering not available in this mode.\n");
+        }
+    } else {
+        printf("✗ Graphics initialization failed\n");
+        serial_write_string("Graphics initialization failed.\n");
+    }
+
     // Теперь можно запустить основной цикл
     while (1) {
         arch_halt(); // при отсутствии задач простаиваем, пока прерывание не придёт
