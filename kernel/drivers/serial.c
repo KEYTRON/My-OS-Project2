@@ -25,6 +25,9 @@
 #define COM1_MODEM_CONTROL COM1_PORT + 4
 #define COM1_LINE_STATUS COM1_PORT + 5
 
+// Отладочный порт Bochs/QEMU (debugcon). Полезно для CI, где нет доступа к VGA.
+#define DEBUGCON_PORT 0xE9
+
 // Вспомогательная функция для отправки команд в порты
 static inline void outb(uint16_t port, uint8_t val) {
     // Using naked inline asm syntax compatible with both GCC and Clang
@@ -61,11 +64,17 @@ void serial_init() {
 
 // Отправка одного символа
 void serial_write_char(char c) {
-    // Ждем, пока буфер передачи не освободится
-    while ((inb(COM1_LINE_STATUS) & 0x20) == 0);
+    // Ждем, пока буфер передачи не освободится, но не бесконечно (важно для CI)
+    int timeout = 100000;
+    while ((inb(COM1_LINE_STATUS) & 0x20) == 0 && --timeout > 0) {
+        /* spin */
+    }
 
-    // Отправляем символ
+    // Отправляем символ в COM1
     outb(COM1_DATA, c);
+
+    // Дублируем вывод в отладочный порт. QEMU перенаправляет его в -debugcon.
+    outb(DEBUGCON_PORT, c);
 }
 
 // Отправка строки
