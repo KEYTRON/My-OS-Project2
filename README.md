@@ -135,6 +135,14 @@ cd utils
 # x86_64
 cd utils
 ./run_qemu.sh
+```
+
+> ℹ️ Для автоматизированных проверок предусмотрен режим быстрого выхода ядра.
+> Сборка с переменной окружения `QEMU_EXIT=1` заставляет ядро
+> сигнализировать QEMU о корректном завершении через `isa-debug-exit`.
+> Этот режим используется в CI, чтобы убедиться, что образ действительно загружается.
+
+```bash
 
 # ARM64
 qemu-system-aarch64 -cdrom myos-arm64.iso -m 512M -serial stdio -no-reboot -display none -machine virt

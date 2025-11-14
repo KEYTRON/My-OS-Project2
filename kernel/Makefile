@@ -44,6 +44,10 @@ endif
 CFLAGS  := -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude
 LDFLAGS := -nostdlib -T $(LINKER_SCRIPT)
 
+ifeq ($(QEMU_EXIT),1)
+    CFLAGS += -DENABLE_QEMU_EXIT
+endif
+
 # Папка с исходниками ядра
 SRCDIR  := .
 OUTDIR  := build

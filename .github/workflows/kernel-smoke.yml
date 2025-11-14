@@ -1,0 +1,54 @@
+name: Kernel smoke test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  qemu-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential nasm xorriso grub-pc-bin grub-common qemu-system-x86 mtools
+
+      - name: Build x86_64 ISO (QEMU exit enabled)
+        run: |
+          set -euo pipefail
+          QEMU_EXIT=1 ./utils/build_iso.sh
+          ls -l kernel/myos.iso
+
+      - name: Verify multiboot header
+        run: |
+          grub-file --is-x86-multiboot kernel/build/kernel-x86_64.bin
+
+      - name: Boot under QEMU
+        run: |
+          set -euo pipefail
+          status=0
+          timeout 25s qemu-system-x86_64 \
+            -cdrom kernel/myos.iso \
+            -m 256 \
+            -display none \
+            -serial stdio \
+            -no-reboot \
+            -no-shutdown \
+            -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+            > qemu.log 2>&1 || status=$?
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            cat qemu.log
+            exit $status
+          fi
+          if [ "$status" -eq 1 ]; then
+            echo "QEMU exited via isa-debug-exit (kernel reached qemu_exit)."
+          fi
+          if [ ! -s qemu.log ]; then
+            echo "(QEMU log empty: kernel exited before serial output, as expected)"
+          else
+            tail -n 50 qemu.log
+          fi
