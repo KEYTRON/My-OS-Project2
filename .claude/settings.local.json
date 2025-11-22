@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe:*)",
+      "Bash(readelf:*)",
+      "Bash(objcopy:*)",
+      "Bash(dpkg:*)",
+      "Bash(bash -lc:*)",
+      "Bash(make clean:*)",
+      "Bash(make:*)",
+      "Bash(ld:*)",
+      "Bash(pwd:*)",
+      "Bash(wsl.exe bash:*)",
+      "Bash(wsl.exe which grub-mkrescue xorriso)",
+      "Bash(test -f:*)",
+      "Bash(dd:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
