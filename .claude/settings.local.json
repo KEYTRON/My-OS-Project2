@@ -13,7 +13,8 @@
       "Bash(wsl.exe bash:*)",
       "Bash(wsl.exe which grub-mkrescue xorriso)",
       "Bash(test -f:*)",
-      "Bash(dd:*)"
+      "Bash(dd:*)",
+      "Bash(rsync:*)"
     ],
     "deny": [],
     "ask": []
