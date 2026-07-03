@@ -11,5 +11,5 @@ static inline uint64_t read_cr3(void) {
 
 void paging_init() {
     uint64_t cr3 = read_cr3();
-    printf("Paging enabled; CR3=0x%016lx (set up in entry.S)\n", cr3);
+    printf("Paging enabled; CR3=0x%lx (identity map 4 GiB, set up in entry.S)\n", cr3);
 }

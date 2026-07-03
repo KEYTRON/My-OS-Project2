@@ -1,8 +1,12 @@
 // isr.c — обработчики прерываний
 #include "isr.h"
+#include "idt.h"
 #include "../../drivers/serial.h"
 #include "../../drivers/vga.h"
 #include "../../lib/printf.h"
+
+// Зарегистрированные обработчики (таблица объявлена в idt.c)
+extern void (*interrupt_handlers[])();
 
 // Массив с сообщениями об исключениях CPU (0..31)
 const char* exception_messages[] = {
@@ -40,39 +44,45 @@ const char* exception_messages[] = {
     "Reserved"
 };
 
-// Общий обработчик исключений
+static inline void outb(uint16_t port, uint8_t val) {
+    asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+
+static inline uint64_t read_cr2(void) {
+    uint64_t value;
+    asm volatile("mov %%cr2, %0" : "=r"(value));
+    return value;
+}
+
+// Общий обработчик исключений: печатаем диагностику и останавливаем ядро
 void isr_handler(registers_t* regs) {
-    // Остановим таймер или задачи, и выведем сообщение
-    // Используем упрощённый printf
-    printf("Received Interrupt: %d\n", regs->int_no);
+    printf("\n!!! CPU EXCEPTION %d", (int)regs->int_no);
     if (regs->int_no < 32) {
-        printf("Exception: %s\n", exception_messages[regs->int_no]);
+        printf(" (%s)", exception_messages[regs->int_no]);
     }
-    // Здесь можно «парковать» ядро в бесконечности:
-    while (1) {
-        asm volatile("hlt");
+    printf("\n    err=0x%lx rip=0x%lx rsp=0x%lx rflags=0x%lx\n",
+           regs->err_code, regs->rip, regs->rsp, regs->rflags);
+    if (regs->int_no == 14) {
+        printf("    cr2=0x%lx (fault address)\n", read_cr2());
+    }
+    printf("System halted.\n");
+    for (;;) {
+        asm volatile("cli; hlt");
     }
 }
 
-// Общий обработчик IRQ
+// Общий обработчик IRQ: диспетчеризуем по таблице зарегистрированных
+// обработчиков и посылаем EOI контроллеру PIC.
 void irq_handler(registers_t* regs) {
-    if (regs->int_no == 32) {
-        // обработка таймера
-        // можно увеличить счетчик «тик-тайма» и переключить задачи
-        printf("Timer interrupt!\n");
-    } else if (regs->int_no == 33) {
-        // обработка клавиатуры (scan code в IO port 0x60)
-        uint8_t scancode;
-        asm volatile("inb %1, %0" : "=a"(scancode) : "Nd"(0x60));
-        // здесь можно переводить scancode в символ
-        printf("Keyboard interrupt! Scancode: %x\n", scancode);
+    uint64_t n = regs->int_no;
+
+    if (n < 256 && interrupt_handlers[n] != 0) {
+        interrupt_handlers[n]();
     }
 
-    // Отправляем EOI (End Of Interrupt) контроллеру PIC
-    if (regs->int_no >= 40) {
-        // Слейв PIC
-        asm volatile("movb $0x20, %%al; outb %%al, $0xA0" : : : "al");
+    // EOI: слейву — только для IRQ8-15, мастеру — всегда
+    if (n >= 40) {
+        outb(0xA0, 0x20);
     }
-    // Мастер PIC (всегда)
-    asm volatile("movb $0x20, %%al; outb %%al, $0x20" : : : "al");
+    outb(0x20, 0x20);
 }

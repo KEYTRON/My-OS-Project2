@@ -1,23 +1,26 @@
-// printf.c — простая реализация printf
+// printf.c — простая реализация printf (VGA + serial)
 #include "printf.h"
 #include "../drivers/vga.h"
 #include "../drivers/serial.h"
 #include "../lib/string.h"
 
-// Предположим, что по умолчанию используем VGA, но можем переключаться:
-#define USE_VGA
-//#define USE_SERIAL_OUT
-
-// Вспомогательная функция для записи одного символа (в VGA или Serial)
+// Вывод идёт одновременно на VGA и в COM1/debugcon — так лог виден и на
+// экране, и в CI (qemu -serial/-debugcon).
 static void put_char(char c) {
-#ifdef USE_SERIAL_OUT
-    serial_write_char(c);
-#else
+    if (c == '\f') { // form feed = очистка экрана (используется shell'ом)
+        vga_clear();
+        return;
+    }
     vga_putc_color(c, vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-#endif
+    serial_write_char(c);
 }
 
-// Перевод числа base-осный в строку (рверсия itoa)
+// Экспортируемый посимвольный вывод (используется Rust-частью ядра)
+void kputchar(char c) {
+    put_char(c);
+}
+
+// Перевод беззнакового числа в строку в указанной системе счисления
 static void itoa(unsigned long value, char* str, int base) {
     char* ptr = str, *ptr1 = str, tmp_char;
     unsigned long tmp_value;
@@ -47,7 +50,12 @@ static void itoa(unsigned long value, char* str, int base) {
     }
 }
 
-// Основная функция printf
+static void put_string(const char* s) {
+    while (*s) put_char(*s++);
+}
+
+// Основная функция printf. Поддерживает %c %d %u %x %s %p %%
+// и длинный модификатор l (%ld %lu %lx).
 void printf(const char* format, ...) {
     va_list args;
     va_start(args, format);
@@ -61,34 +69,53 @@ void printf(const char* format, ...) {
             continue;
         }
         traverse++;
-        // Спецификатор:
+
+        int is_long = 0;
+        while (*traverse == 'l') { // %l, %ll — трактуем одинаково (64 бита)
+            is_long = 1;
+            traverse++;
+        }
+        if (*traverse == 'z') { // %zu и т.п.
+            is_long = 1;
+            traverse++;
+        }
+
         switch (*traverse) {
             case 'c': {
                 char c = (char)va_arg(args, int);
                 put_char(c);
             } break;
-            case 'd': {
-                int i = va_arg(args, int);
+            case 'd': case 'i': {
+                long i = is_long ? va_arg(args, long) : (long)va_arg(args, int);
                 if (i < 0) {
                     put_char('-');
                     i = -i;
                 }
-                itoa(i, buffer, 10);
-                for (char* p = buffer; *p; p++) put_char(*p);
+                itoa((unsigned long)i, buffer, 10);
+                put_string(buffer);
             } break;
             case 'u': {
-                unsigned int u = va_arg(args, unsigned int);
+                unsigned long u = is_long ? va_arg(args, unsigned long)
+                                          : (unsigned long)va_arg(args, unsigned int);
                 itoa(u, buffer, 10);
-                for (char* p = buffer; *p; p++) put_char(*p);
+                put_string(buffer);
             } break;
             case 'x': {
-                unsigned int x = va_arg(args, unsigned int);
+                unsigned long x = is_long ? va_arg(args, unsigned long)
+                                          : (unsigned long)va_arg(args, unsigned int);
                 itoa(x, buffer, 16);
-                for (char* p = buffer; *p; p++) put_char(*p);
+                put_string(buffer);
+            } break;
+            case 'p': {
+                unsigned long p = (unsigned long)va_arg(args, void*);
+                put_string("0x");
+                itoa(p, buffer, 16);
+                put_string(buffer);
             } break;
             case 's': {
                 const char* s = va_arg(args, const char*);
-                for (size_t i = 0; s[i]; i++) put_char(s[i]);
+                if (!s) s = "(null)";
+                put_string(s);
             } break;
             case '%': {
                 put_char('%');

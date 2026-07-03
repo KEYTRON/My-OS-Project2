@@ -13,4 +13,7 @@ void keyboard_init();
 // Функция-обработчик (вызывается из irq_handler)
 void keyboard_callback();
 
+// Неблокирующее чтение символа из буфера ввода: -1, если буфер пуст
+int keyboard_getchar(void);
+
 #endif // KEYBOARD_H

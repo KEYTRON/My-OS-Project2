@@ -55,7 +55,7 @@ typedef struct graphics_device {
 
     // Framebuffer info
     void *framebuffer;        // Pointer to framebuffer memory
-    uint32_t framebuffer_size; // Total framebuffer size in bytes
+    uint64_t framebuffer_size; // Total framebuffer size in bytes
     uint32_t pitch;           // Bytes per scanline
 
     // Driver functions
@@ -75,6 +75,12 @@ extern graphics_device_t *g_graphics_device;
 
 // Core graphics API
 graphics_device_t *graphics_init(void);
+
+// Передать параметры framebuffer'а из multiboot info (вызывается из kmain
+// до graphics_init; только x86_64)
+void graphics_set_framebuffer_info(uint64_t addr, uint32_t pitch,
+                                   uint32_t width, uint32_t height,
+                                   uint8_t bpp);
 void graphics_cleanup(void);
 
 // Drawing functions

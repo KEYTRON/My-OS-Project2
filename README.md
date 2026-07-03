@@ -2,6 +2,31 @@
 
 Проект нацелен на создание полноценной мультиархитектурной операционной системы с нуля. Включает загрузчик, ядро и другие необходимые компоненты для работы на различных архитектурах процессоров.
 
+## 🧬 Языки ядра
+
+Ядро собрано из четырёх языков (x86_64):
+
+| Язык | Что делает | Где |
+|------|------------|-----|
+| **ASM** (nasm) | multiboot-заголовок, переход в long mode, identity map 4 GiB, заглушки прерываний | `kernel/arch/x86_64/entry.S`, `isr_stubs.S`, `gdt.S` |
+| **C** | драйверы (VGA, COM1, PS/2 клавиатура, PIT-таймер), GDT/IDT, графика, kmain | `kernel/drivers/`, `kernel/arch/x86_64/`, `kernel/kmain.c` |
+| **C++** | куча ядра: free-list аллокатор `kmalloc`/`kfree`/`krealloc` + operator new/delete | `kernel/lib/cxx/kheap.cpp` |
+| **Rust** | интерактивная оболочка `myos>` (no_std + alloc поверх C++ кучи) | `kernel/rust/src/lib.rs` |
+
+Что умеет ядро после загрузки:
+
+- Полная инициализация: GDT, IDT (256 векторов, PIC remap), пейджинг, куча 16 MiB, PIT на 100 Гц, клавиатура
+- Графический рабочий стол 1024×768×32 (framebuffer от GRUB через multiboot)
+- Rust-оболочка на VGA-консоли и serial: `help`, `about`, `langs`, `mem`, `alloc`, `uptime`, `echo`, `clear`, `reboot`, `halt`
+
+Быстрый старт (нужны `gcc`, `g++`, `nasm`, `grub-mkrescue`, `xorriso`, `qemu`, Rust с таргетом `x86_64-unknown-none`):
+
+```bash
+rustup target add x86_64-unknown-none
+./utils/build_iso.sh
+qemu-system-x86_64 -cdrom kernel/myos.iso -m 256 -serial stdio
+```
+
 ## 🏗️ Поддерживаемые архитектуры
 
 - **x86_64** - 64-битные процессоры Intel/AMD (основная поддержка)

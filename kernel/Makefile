@@ -1,11 +1,17 @@
 # Makefile для ядра MyOS - поддержка множественных архитектур
+#
+# Ядро состоит из четырёх языков:
+#   ASM  (nasm)  - entry.S, isr_stubs.S, gdt.S
+#   C    (gcc)   - драйверы, GDT/IDT, kmain
+#   C++  (g++)   - куча ядра (lib/cxx)
+#   Rust (cargo) - оболочка (rust/, staticlib для x86_64-unknown-none)
 
 # Определяем архитектуру по умолчанию
 ARCH ?= x86_64
 
 # Кросс-компиляторы для разных архитектур
-# Используем gcc с флагами для компиляции без зависимостей от ОС
 X86_64_CC := $(shell which x86_64-elf-gcc || which gcc)
+X86_64_CXX := $(shell which x86_64-elf-g++ || which g++)
 X86_64_LD := $(shell which x86_64-elf-ld || which ld)
 X86_64_NASM := nasm
 
@@ -17,9 +23,12 @@ RISCV64_CC := $(shell which riscv64-elf-gcc || which gcc)
 RISCV64_LD := $(shell which riscv64-elf-ld || which ld)
 RISCV64_AS := $(shell which riscv64-elf-as || which as)
 
+CARGO := $(shell which cargo || echo $(HOME)/.cargo/bin/cargo)
+
 # Выбираем компиляторы в зависимости от архитектуры
 ifeq ($(ARCH),x86_64)
     CC := $(X86_64_CC)
+    CXX := $(X86_64_CXX)
     LD := $(X86_64_LD)
     NASM := $(X86_64_NASM)
     KERNEL_BIN := build/kernel-x86_64.bin
@@ -40,9 +49,22 @@ else
     $(error Unsupported architecture: $(ARCH). Supported: x86_64, arm64, riscv64)
 endif
 
-# Флаги для компилятора
-CFLAGS  := -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Iinclude
-LDFLAGS := -nostdlib -T $(LINKER_SCRIPT)
+# Флаги для компилятора.
+# Для кода ядра x86_64 критичны:
+#   -mno-red-zone          — обработчики прерываний затирают red zone
+#   -mno-mmx/-mno-sse*     — SSE не включён в CR0/CR4, инструкции дадут #UD
+#   -fno-stack-protector   — нет рантайма для канареек
+#   -fno-pic/-fno-pie      — ядро линкуется по фиксированному адресу
+FREESTANDING_FLAGS := -ffreestanding -O2 -Wall -Wextra -Iinclude \
+                      -fno-stack-protector -fno-pic -fno-pie -fno-builtin
+ifeq ($(ARCH),x86_64)
+    FREESTANDING_FLAGS += -mno-red-zone -mno-mmx -mno-sse -mno-sse2
+endif
+
+CFLAGS   := -std=gnu99 $(FREESTANDING_FLAGS)
+CXXFLAGS := -std=gnu++17 $(FREESTANDING_FLAGS) -fno-exceptions -fno-rtti \
+            -fno-use-cxa-atexit
+LDFLAGS  := -nostdlib -T $(LINKER_SCRIPT)
 
 ifeq ($(QEMU_EXIT),1)
     CFLAGS += -DENABLE_QEMU_EXIT
@@ -57,6 +79,9 @@ C_SRCS := $(shell find drivers -name '*.c') \
           $(shell find lib -name '*.c') \
           kmain.c
 
+# C++ файлы (куча ядра)
+CXX_SRCS := $(shell find lib -name '*.cpp')
+
 # Архитектурно-зависимые C-файлы
 ifeq ($(ARCH),x86_64)
     ARCH_C_SRCS := arch/x86_64/gdt.c \
@@ -69,38 +94,46 @@ else ifeq ($(ARCH),riscv64)
     ARCH_C_SRCS := # RISC-V64 специфичные C-файлы будут добавлены позже
 endif
 
-# Объединяем все C-файлы
+# Объединяем все C файлы
 ALL_C_SRCS := $(C_SRCS) $(ARCH_C_SRCS)
 
 # Соответствующие объектные файлы
 C_OBJS := $(patsubst %.c, $(OUTDIR)/%.o, $(ALL_C_SRCS))
+CXX_OBJS := $(patsubst %.cpp, $(OUTDIR)/%.o, $(CXX_SRCS))
+
+# Rust staticlib (только для x86_64)
+RUST_TARGET := x86_64-unknown-none
+RUST_LIB := rust/target/$(RUST_TARGET)/release/libmyos_rust.a
 
 # Архитектурно-зависимые файлы
 ifeq ($(ARCH),x86_64)
     # x86_64 специфичные файлы
     ASM_SRCS := arch/x86_64/entry.S \
                 arch/x86_64/isr_stubs.S
-    
+
     ASM_OBJS := $(patsubst %.S, $(OUTDIR)/%.o, $(ASM_SRCS))
     GDT_ASM_OBJ := $(OUTDIR)/arch/x86_64/gdt_asm.o
-    
+
     ARCH_OBJS := $(ASM_OBJS) $(GDT_ASM_OBJ)
-    
+    EXTRA_LIBS := $(RUST_LIB)
+
 else ifeq ($(ARCH),arm64)
     # ARM64 специфичные файлы
     ASM_SRCS := arch/arm64/entry.S
-    
+
     ASM_OBJS := $(patsubst %.S, $(OUTDIR)/%.o, $(ASM_SRCS))
-    
+
     ARCH_OBJS := $(ASM_OBJS)
-    
+    EXTRA_LIBS :=
+
 else ifeq ($(ARCH),riscv64)
     # RISC-V64 специфичные файлы
     ASM_SRCS := arch/riscv64/entry.S
-    
+
     ASM_OBJS := $(patsubst %.S, $(OUTDIR)/%.o, $(ASM_SRCS))
-    
+
     ARCH_OBJS := $(ASM_OBJS)
+    EXTRA_LIBS :=
 endif
 
 # Правила
@@ -111,13 +144,25 @@ $(OUTDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Собираем C++-файлы
+$(OUTDIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Rust staticlib (оболочка ядра)
+.PHONY: rust-lib
+rust-lib:
+	cd rust && $(CARGO) build --release --target $(RUST_TARGET)
+
+$(RUST_LIB): rust-lib
+
 # Архитектурно-зависимые правила для ассемблерных файлов
 ifeq ($(ARCH),x86_64)
     # Правила для x86_64 (NASM)
     $(OUTDIR)/%.o: %.S
 		@mkdir -p $(dir $@)
 		$(NASM) -f elf64 $< -o $@
-    
+
     $(GDT_ASM_OBJ): arch/x86_64/gdt.S
 		@mkdir -p $(dir $@)
 		$(NASM) -f elf64 $< -o $@
@@ -129,8 +174,8 @@ else
 endif
 
 # Линкуем ядро
-$(KERNEL_BIN): $(ARCH_OBJS) $(C_OBJS) $(LINKER_SCRIPT)
-	$(LD) $(LDFLAGS) -o $@ $(ARCH_OBJS) $(C_OBJS)
+$(KERNEL_BIN): $(ARCH_OBJS) $(C_OBJS) $(CXX_OBJS) $(EXTRA_LIBS) $(LINKER_SCRIPT)
+	$(LD) $(LDFLAGS) -o $@ $(ARCH_OBJS) $(C_OBJS) $(CXX_OBJS) $(EXTRA_LIBS)
 
 # Сборка для всех архитектур
 all-archs:
@@ -141,19 +186,23 @@ all-archs:
 # Очистка
 clean:
 	rm -rf $(OUTDIR)
+	rm -rf rust/target
 
 # Очистка для всех архитектур
 clean-all:
 	rm -rf build
 	rm -rf arch/*/build
+	rm -rf rust/target
 
 # Проверка зависимостей
 check-deps:
 	@echo "Checking dependencies for $(ARCH)..."
 ifeq ($(ARCH),x86_64)
 	@which $(X86_64_CC) > /dev/null || (echo "Error: $(X86_64_CC) not found" && exit 1)
+	@which $(X86_64_CXX) > /dev/null || (echo "Error: $(X86_64_CXX) not found" && exit 1)
 	@which $(X86_64_LD) > /dev/null || (echo "Error: $(X86_64_LD) not found" && exit 1)
 	@which $(X86_64_NASM) > /dev/null || (echo "Error: $(X86_64_NASM) not found" && exit 1)
+	@which $(CARGO) > /dev/null || (echo "Error: cargo not found" && exit 1)
 else ifeq ($(ARCH),arm64)
 	@which $(ARM64_CC) > /dev/null || (echo "Error: $(ARM64_CC) not found" && exit 1)
 	@which $(ARM64_LD) > /dev/null || (echo "Error: $(ARM64_LD) not found" && exit 1)

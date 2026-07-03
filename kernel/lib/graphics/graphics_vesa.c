@@ -1,4 +1,10 @@
-// graphics_vesa.c - VESA VBE 3.0 graphics driver for x86_64
+// graphics_vesa.c - линейный framebuffer, полученный от GRUB (multiboot)
+//
+// Ядро запрашивает видеорежим в multiboot-заголовке (entry.S). GRUB
+// устанавливает VBE-режим и передаёт адрес/геометрию framebuffer'а в
+// multiboot info. kmain вызывает graphics_set_framebuffer_info() до
+// graphics_init(); если информации нет — драйвер честно возвращает NULL
+// и ядро остаётся в текстовом режиме.
 
 #include "graphics.h"
 #include "../printf.h"
@@ -6,45 +12,55 @@
 
 #ifdef __x86_64__
 
-// Simple VESA framebuffer detection for QEMU
-// In a real implementation, this would use INT 0x10 BIOS calls
-
 static graphics_device_t vesa_device;
 
-// Simple framebuffer-based drawing functions
+// Параметры framebuffer'а из multiboot info (0 = не задано)
+static uint64_t mb_fb_addr = 0;
+static uint32_t mb_fb_pitch = 0;
+static uint32_t mb_fb_width = 0;
+static uint32_t mb_fb_height = 0;
+static uint8_t  mb_fb_bpp = 0;
+
+void graphics_set_framebuffer_info(uint64_t addr, uint32_t pitch,
+                                   uint32_t width, uint32_t height,
+                                   uint8_t bpp) {
+    mb_fb_addr = addr;
+    mb_fb_pitch = pitch;
+    mb_fb_width = width;
+    mb_fb_height = height;
+    mb_fb_bpp = bpp;
+}
+
+// Строка пикселей с учётом pitch (может отличаться от width*4)
+static inline uint32_t *fb_row(graphics_device_t *dev, int32_t y) {
+    return (uint32_t *)((uint8_t *)dev->framebuffer + (uint32_t)y * dev->pitch);
+}
+
 static void vesa_clear(graphics_device_t *dev, uint32_t color) {
     if (dev->framebuffer == NULL) return;
-
-    uint32_t *fb = (uint32_t *)dev->framebuffer;
-    uint32_t pixels = dev->width * dev->height;
-
-    for (uint32_t i = 0; i < pixels; i++) {
-        fb[i] = color;
+    for (uint32_t y = 0; y < dev->height; y++) {
+        uint32_t *row = fb_row(dev, y);
+        for (uint32_t x = 0; x < dev->width; x++) {
+            row[x] = color;
+        }
     }
 }
 
 static void vesa_putpixel(graphics_device_t *dev, int32_t x, int32_t y, uint32_t color) {
     if (dev->framebuffer == NULL) return;
     if (x < 0 || y < 0 || (uint32_t)x >= dev->width || (uint32_t)y >= dev->height) return;
-
-    uint32_t *fb = (uint32_t *)dev->framebuffer;
-    fb[y * dev->width + x] = color;
+    fb_row(dev, y)[x] = color;
 }
 
 static uint32_t vesa_getpixel(graphics_device_t *dev, int32_t x, int32_t y) {
     if (dev->framebuffer == NULL) return 0;
     if (x < 0 || y < 0 || (uint32_t)x >= dev->width || (uint32_t)y >= dev->height) return 0;
-
-    uint32_t *fb = (uint32_t *)dev->framebuffer;
-    return fb[y * dev->width + x];
+    return fb_row(dev, y)[x];
 }
 
 static void vesa_fillrect(graphics_device_t *dev, graphics_rect_t rect, uint32_t color) {
     if (dev->framebuffer == NULL) return;
 
-    uint32_t *fb = (uint32_t *)dev->framebuffer;
-
-    // Clip rectangle to screen bounds
     int32_t x1 = rect.x;
     int32_t y1 = rect.y;
     int32_t x2 = rect.x + rect.width;
@@ -56,8 +72,9 @@ static void vesa_fillrect(graphics_device_t *dev, graphics_rect_t rect, uint32_t
     if (y2 > (int32_t)dev->height) y2 = dev->height;
 
     for (int32_t y = y1; y < y2; y++) {
+        uint32_t *row = fb_row(dev, y);
         for (int32_t x = x1; x < x2; x++) {
-            fb[y * dev->width + x] = color;
+            row[x] = color;
         }
     }
 }
@@ -65,29 +82,31 @@ static void vesa_fillrect(graphics_device_t *dev, graphics_rect_t rect, uint32_t
 static void vesa_drawrect(graphics_device_t *dev, graphics_rect_t rect, uint32_t color) {
     if (dev->framebuffer == NULL) return;
 
-    uint32_t *fb = (uint32_t *)dev->framebuffer;
-
-    // Draw top and bottom edges
-    for (uint32_t x = rect.x; x < rect.x + rect.width && x < dev->width; x++) {
-        if (rect.y < dev->height) fb[rect.y * dev->width + x] = color;
-        if (rect.y + rect.height - 1 < dev->height) {
-            fb[(rect.y + rect.height - 1) * dev->width + x] = color;
-        }
+    // Горизонтальные линии
+    for (int32_t x = rect.x; x < rect.x + (int32_t)rect.width; x++) {
+        if (x < 0 || (uint32_t)x >= dev->width) continue;
+        if (rect.y >= 0 && (uint32_t)rect.y < dev->height)
+            fb_row(dev, rect.y)[x] = color;
+        int32_t yb = rect.y + rect.height - 1;
+        if (yb >= 0 && (uint32_t)yb < dev->height)
+            fb_row(dev, yb)[x] = color;
     }
 
-    // Draw left and right edges
-    for (uint32_t y = rect.y; y < rect.y + rect.height && y < dev->height; y++) {
-        if (rect.x < dev->width) fb[y * dev->width + rect.x] = color;
-        if (rect.x + rect.width - 1 < dev->width) {
-            fb[y * dev->width + (rect.x + rect.width - 1)] = color;
-        }
+    // Вертикальные линии
+    for (int32_t y = rect.y; y < rect.y + (int32_t)rect.height; y++) {
+        if (y < 0 || (uint32_t)y >= dev->height) continue;
+        if (rect.x >= 0 && (uint32_t)rect.x < dev->width)
+            fb_row(dev, y)[rect.x] = color;
+        int32_t xr = rect.x + rect.width - 1;
+        if (xr >= 0 && (uint32_t)xr < dev->width)
+            fb_row(dev, y)[xr] = color;
     }
 }
 
 static void vesa_drawline(graphics_device_t *dev, graphics_point_t p1, graphics_point_t p2, uint32_t color) {
     if (dev->framebuffer == NULL) return;
 
-    // Bresenham line algorithm
+    // Алгоритм Брезенхэма
     int32_t x0 = p1.x, y0 = p1.y;
     int32_t x1 = p2.x, y1 = p2.y;
 
@@ -98,10 +117,7 @@ static void vesa_drawline(graphics_device_t *dev, graphics_point_t p1, graphics_
     int32_t err = (dx > dy) ? (dx / 2) : (-dy / 2);
 
     while (1) {
-        if (x0 >= 0 && x0 < (int32_t)dev->width && y0 >= 0 && y0 < (int32_t)dev->height) {
-            uint32_t *fb = (uint32_t *)dev->framebuffer;
-            fb[y0 * dev->width + x0] = color;
-        }
+        vesa_putpixel(dev, x0, y0, color);
 
         if (x0 == x1 && y0 == y1) break;
 
@@ -118,50 +134,31 @@ static void vesa_drawline(graphics_device_t *dev, graphics_point_t p1, graphics_
 }
 
 static void vesa_flush(graphics_device_t *dev) {
-    // For a real VESA implementation, this would flush to the actual VESA framebuffer
-    // For QEMU with linear framebuffer, this is typically a no-op
-    (void)dev;
+    (void)dev; // рисуем сразу в linear framebuffer
 }
 
 static bool vesa_init(graphics_device_t *dev) {
-    // In QEMU, we can detect the framebuffer via multiboot
-    // For now, we'll use a hardcoded address that works on many systems
-    // Real implementation would use BIOS INT 0x10 calls
+    if (mb_fb_addr == 0 || mb_fb_bpp != 32) {
+        // GRUB не передал 32-битный framebuffer — работаем в текстовом режиме
+        return false;
+    }
 
-    // Try to detect framebuffer from QEMU/Multiboot
-    // Default to 1024x768@32bpp at 0xE0000000 (QEMU standard)
-
-    dev->width = 1024;
-    dev->height = 768;
-    dev->bpp = 32;
-    dev->pitch = dev->width * 4;  // 32-bit = 4 bytes per pixel
-    dev->framebuffer_size = dev->width * dev->height * 4;
+    dev->width = mb_fb_width;
+    dev->height = mb_fb_height;
+    dev->bpp = mb_fb_bpp;
+    dev->pitch = mb_fb_pitch;
+    dev->framebuffer = (void *)mb_fb_addr;
+    dev->framebuffer_size = (uint64_t)mb_fb_pitch * mb_fb_height;
     dev->mode = GRAPHICS_MODE_VESA;
 
-    // Try common framebuffer addresses
-    uint64_t fb_addresses[] = {
-        0xe0000000,  // QEMU default
-        0xfd000000,  // Alternative
-        0xf0000000,  // Another common address
-        0,           // End marker
-    };
-
-    // For now, use a simple approach - allocate from kernel space
-    // Real implementation would map these addresses properly
-    printf("[VESA] Attempting to initialize at 1024x768@32bpp\n");
-
-    // Try to map framebuffer - for now, just indicate attempt
-    // Real implementation would handle memory mapping
-    dev->framebuffer = (void *)fb_addresses[0];
-
-    printf("[VESA] Framebuffer at 0x%lx\n", (uint64_t)dev->framebuffer);
+    printf("[VESA] Framebuffer from multiboot: %ux%u@%u pitch=%u at 0x%lx\n",
+           dev->width, dev->height, dev->bpp, dev->pitch, mb_fb_addr);
 
     return true;
 }
 
 static void vesa_cleanup(graphics_device_t *dev) {
     (void)dev;
-    // Cleanup code here if needed
 }
 
 graphics_device_t *graphics_init_vesa(void) {

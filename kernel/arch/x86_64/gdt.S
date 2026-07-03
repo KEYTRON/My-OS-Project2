@@ -14,3 +14,5 @@ load_gdt:
 load_idt:
     lidt [rdi]      ; Загружаем IDT из указателя в rdi
     ret
+
+section .note.GNU-stack noalloc noexec nowrite progbits

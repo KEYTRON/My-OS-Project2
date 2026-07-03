@@ -2,6 +2,7 @@
 
 #include "graphics.h"
 #include "../printf.h"
+#include "graphics_font.h"
 
 // Global graphics device
 graphics_device_t *g_graphics_device = NULL;
@@ -142,19 +143,13 @@ void graphics_fillcircle(graphics_point_t center, uint32_t radius, uint32_t colo
     }
 }
 
-// Text rendering
+// Text rendering (встроенный 8x8 bitmap-шрифт из graphics_font.c)
 void graphics_putchar(int32_t x, int32_t y, char c, uint32_t fg, uint32_t bg) {
-    // This will be implemented when we have font support
-    (void)x; (void)y; (void)c; (void)fg; (void)bg;
+    graphics_draw_char_at(x, y, c, fg, bg);
 }
 
 void graphics_putstring(int32_t x, int32_t y, const char *str, uint32_t fg, uint32_t bg) {
-    if (str == NULL) return;
-    while (*str) {
-        graphics_putchar(x, y, *str, fg, bg);
-        x += 8;  // Assume 8-pixel character width
-        str++;
-    }
+    graphics_draw_string_at(x, y, str, fg, bg);
 }
 
 // Utility functions

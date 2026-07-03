@@ -17,6 +17,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential nasm xorriso grub-pc-bin grub-common qemu-system-x86 mtools
 
+      - name: Install Rust bare-metal target
+        run: |
+          rustup target add x86_64-unknown-none
+
       - name: Build x86_64 ISO (QEMU exit enabled)
         run: |
           set -euo pipefail
@@ -31,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           status=0
-          timeout 25s qemu-system-x86_64 \
+          timeout 60s qemu-system-x86_64 \
             -cdrom kernel/myos.iso \
             -m 256 \
             -display none \
@@ -40,15 +44,14 @@ jobs:
             -no-shutdown \
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
             > qemu.log 2>&1 || status=$?
+          # isa-debug-exit с кодом 0 завершает QEMU со статусом 1
           if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
             cat qemu.log
             exit $status
           fi
-          if [ "$status" -eq 1 ]; then
-            echo "QEMU exited via isa-debug-exit (kernel reached qemu_exit)."
-          fi
-          if [ ! -s qemu.log ]; then
-            echo "(QEMU log empty: kernel exited before serial output, as expected)"
-          else
-            tail -n 50 qemu.log
-          fi
+          tail -n 30 qemu.log
+          # Ядро сигналит выход только ПОСЛЕ полной инициализации
+          # (GDT, IDT, C++ куча, таймер, клавиатура, Rust selftest)
+          grep -q "Rust runtime selftest: OK" qemu.log
+          grep -q "Kernel init complete." qemu.log
+          echo "Smoke test passed: kernel initialized all subsystems."

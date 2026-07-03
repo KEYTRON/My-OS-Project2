@@ -126,8 +126,8 @@ isr_common_stub:
     
     ; Убираем error code и номер прерывания
     add rsp, 16
-    
-    sti                     ; Включаем прерывания
+
+    ; iretq сам восстановит RFLAGS (включая IF) из стека
     iretq
 
 ; Общий обработчик для IRQ
@@ -172,6 +172,8 @@ irq_common_stub:
     
     ; Убираем error code и номер прерывания
     add rsp, 16
-    
-    sti                     ; Включаем прерывания
+
+    ; iretq сам восстановит RFLAGS (включая IF) из стека
     iretq
+
+section .note.GNU-stack noalloc noexec nowrite progbits

@@ -31,6 +31,9 @@ enum vga_color {
 // Инициализация VGA (просто очищаем экран)
 void vga_init();
 
+// Очистка экрана
+void vga_clear(void);
+
 // Установить цвет (фоновый + символа)
 uint8_t vga_entry_color(uint8_t fg, uint8_t bg);
 
