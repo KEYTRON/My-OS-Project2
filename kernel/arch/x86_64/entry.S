@@ -1,13 +1,31 @@
 ; entry.S - 32-bit multiboot entry that switches to x86_64 long mode
+;
+; GRUB загружает нас в 32-битном protected mode. Здесь мы:
+;   1. Сохраняем magic/указатель multiboot info (EAX/EBX)
+;   2. Строим bootstrap-таблицы страниц: identity-map первых 4 GiB
+;      2-МиБ страницами (ядро, VGA, LAPIC, framebuffer — всё доступно)
+;   3. Включаем PAE + long mode + paging
+;   4. Прыгаем в 64-битный код и вызываем kernel_main(magic, mb_info)
 
 BITS 32
+
+MB_FLAG_ALIGN  equ 1 << 0            ; выравнивать модули по страницам
+MB_FLAG_MEM    equ 1 << 1            ; передать карту памяти
+MB_FLAG_VIDEO  equ 1 << 2            ; запросить видеорежим
+MB_FLAGS       equ MB_FLAG_ALIGN | MB_FLAG_MEM | MB_FLAG_VIDEO
+MB_MAGIC       equ 0x1BADB002
 
 section .multiboot
 align 4
 multiboot_header:
-    dd 0x1BADB002
-    dd 0x00000000
-    dd -(0x1BADB002 + 0)
+    dd MB_MAGIC
+    dd MB_FLAGS
+    dd -(MB_MAGIC + MB_FLAGS)
+    dd 0, 0, 0, 0, 0                 ; header_addr .. entry_addr (не используются)
+    dd 0                             ; mode_type: 0 = линейный графический
+    dd 1024                          ; желаемая ширина
+    dd 768                           ; желаемая высота
+    dd 32                            ; желаемая глубина цвета
 
 section .text
 global _start
@@ -19,26 +37,41 @@ _start:
     ; temporary 32-bit stack
     mov esp, stack32_top
 
-    ; clear bootstrap page tables
+    ; сохраняем регистры multiboot до того, как их затрём
+    mov [mb_magic_saved], eax
+    mov [mb_info_saved], ebx
+
+    ; clear bootstrap page tables (PML4 + PDPT + 4 PD)
     lea edi, [pml4_table]
-    mov ecx, (4096 * 3) / 4
+    mov ecx, (4096 * 6) / 4
     xor eax, eax
     rep stosd
 
-    ; identity-map first 2 MiB using a single 2 MiB page
+    ; PML4[0] -> PDPT
     mov eax, pdpt_table
-    or eax, 0x3
+    or eax, 0x3                      ; present | writable
     mov [pml4_table], eax
-    mov dword [pml4_table + 4], 0
 
-    mov eax, pd_table
+    ; PDPT[0..3] -> PD0..PD3 (по 1 GiB каждая)
+    mov eax, pd_tables
     or eax, 0x3
-    mov [pdpt_table], eax
-    mov dword [pdpt_table + 4], 0
+    mov edi, pdpt_table
+    mov ecx, 4
+.fill_pdpt:
+    mov [edi], eax
+    add eax, 4096
+    add edi, 8
+    loop .fill_pdpt
 
-    mov eax, 0x00000083        ; present | writable | 2 MiB page
-    mov [pd_table], eax
-    mov dword [pd_table + 4], 0
+    ; заполняем 4 PD: 4 * 512 записей по 2 MiB = 4 GiB identity map
+    mov edi, pd_tables
+    mov eax, 0x00000083              ; present | writable | 2 MiB page
+    mov ecx, 512 * 4
+.fill_pd:
+    mov [edi], eax
+    add eax, 0x200000                ; следующие 2 MiB
+    add edi, 8
+    loop .fill_pd
 
     ; enable PAE
     mov eax, cr4
@@ -49,11 +82,10 @@ _start:
     mov eax, pml4_table
     mov cr3, eax
 
-    ; enable long mode in EFER (NXE commented out for now)
+    ; enable long mode in EFER
     mov ecx, 0xC0000080
     rdmsr
-    or eax, 1 << 8             ; LME
-    ;or eax, 1 << 11           ; NXE
+    or eax, 1 << 8                   ; LME
     wrmsr
 
     ; enable paging
@@ -79,6 +111,10 @@ long_mode_entry:
     mov rsp, stack64_top
     xor rbp, rbp
 
+    ; kernel_main(uint32_t magic, uint32_t mb_info)
+    mov edi, [mb_magic_saved]
+    mov esi, [mb_info_saved]
+
     call kernel_main
 
 .hang:
@@ -97,14 +133,17 @@ gdt64_ptr:
     dw gdt64_end - gdt64 - 1
     dd gdt64
 
+mb_magic_saved: dd 0
+mb_info_saved:  dd 0
+
 section .bss
 align 4096
 pml4_table:
     resb 4096
 pdpt_table:
     resb 4096
-pd_table:
-    resb 4096
+pd_tables:
+    resb 4096 * 4
 
 align 16
 stack32:
@@ -113,5 +152,7 @@ stack32_top:
 
 align 16
 stack64:
-    resb 8192
+    resb 16384
 stack64_top:
+
+section .note.GNU-stack noalloc noexec nowrite progbits

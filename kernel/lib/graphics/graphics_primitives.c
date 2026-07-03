@@ -185,10 +185,11 @@ void graphics_gradient_rect(graphics_rect_t rect, uint32_t color1, uint32_t colo
     if (direction == GRADIENT_HORIZONTAL) {
         for (int32_t x = rect.x; x < rect.x + (int32_t)rect.width; x++) {
             // Interpolate color
-            float t = (float)(x - rect.x) / (float)rect.width;
-            uint8_t r = (uint8_t)(r1 + (r2 - r1) * t);
-            uint8_t g = (uint8_t)(g1 + (g2 - g1) * t);
-            uint8_t b = (uint8_t)(b1 + (b2 - b1) * t);
+            // t в фиксированной точке 8.8 (0..256)
+            int32_t t = ((x - rect.x) * 256) / (int32_t)rect.width;
+            uint8_t r = (uint8_t)(r1 + ((r2 - r1) * t) / 256);
+            uint8_t g = (uint8_t)(g1 + ((g2 - g1) * t) / 256);
+            uint8_t b = (uint8_t)(b1 + ((b2 - b1) * t) / 256);
             uint32_t grad_color = graphics_rgb_to_color(r, g, b);
 
             graphics_rect_t col = {.x = x, .y = rect.y, .width = 1, .height = rect.height};
@@ -197,10 +198,11 @@ void graphics_gradient_rect(graphics_rect_t rect, uint32_t color1, uint32_t colo
     } else if (direction == GRADIENT_VERTICAL) {
         for (int32_t y = rect.y; y < rect.y + (int32_t)rect.height; y++) {
             // Interpolate color
-            float t = (float)(y - rect.y) / (float)rect.height;
-            uint8_t r = (uint8_t)(r1 + (r2 - r1) * t);
-            uint8_t g = (uint8_t)(g1 + (g2 - g1) * t);
-            uint8_t b = (uint8_t)(b1 + (b2 - b1) * t);
+            // t в фиксированной точке 8.8 (0..256)
+            int32_t t = ((y - rect.y) * 256) / (int32_t)rect.height;
+            uint8_t r = (uint8_t)(r1 + ((r2 - r1) * t) / 256);
+            uint8_t g = (uint8_t)(g1 + ((g2 - g1) * t) / 256);
+            uint8_t b = (uint8_t)(b1 + ((b2 - b1) * t) / 256);
             uint32_t grad_color = graphics_rgb_to_color(r, g, b);
 
             graphics_rect_t row = {.x = rect.x, .y = y, .width = rect.width, .height = 1};
@@ -311,66 +313,51 @@ void graphics_draw_text_shadow(uint32_t x, uint32_t y, const char *text,
 // Color Utilities
 // ========================================
 
-uint32_t graphics_interpolate_color(uint32_t color1, uint32_t color2, float factor) {
+// factor — фиксированная точка 8.8: 0 = color1, 256 = color2.
+// В ядре SSE отключён, поэтому вся цветовая математика целочисленная.
+uint32_t graphics_interpolate_color(uint32_t color1, uint32_t color2, uint32_t factor) {
+    if (factor > 256) factor = 256;
     uint8_t r1, g1, b1, r2, g2, b2;
     graphics_color_to_rgb(color1, &r1, &g1, &b1);
     graphics_color_to_rgb(color2, &r2, &g2, &b2);
 
-    uint8_t r = (uint8_t)(r1 + (r2 - r1) * factor);
-    uint8_t g = (uint8_t)(g1 + (g2 - g1) * factor);
-    uint8_t b = (uint8_t)(b1 + (b2 - b1) * factor);
+    uint8_t r = (uint8_t)(r1 + (((int32_t)r2 - r1) * (int32_t)factor) / 256);
+    uint8_t g = (uint8_t)(g1 + (((int32_t)g2 - g1) * (int32_t)factor) / 256);
+    uint8_t b = (uint8_t)(b1 + (((int32_t)b2 - b1) * (int32_t)factor) / 256);
 
     return graphics_rgb_to_color(r, g, b);
 }
 
-float graphics_get_color_brightness(uint32_t color) {
+// Яркость 0..255 (формула ITU-R BT.601, целочисленно)
+uint8_t graphics_get_color_brightness(uint32_t color) {
     uint8_t r, g, b;
     graphics_color_to_rgb(color, &r, &g, &b);
-    // Standard brightness formula
-    return (0.299f * r + 0.587f * g + 0.114f * b) / 255.0f;
+    return (uint8_t)((77 * r + 150 * g + 29 * b) >> 8);
 }
 
-uint32_t graphics_hsv_to_rgb(float h, float s, float v) {
-    // Ensure values are in proper ranges
-    while (h < 0) h += 360;
-    while (h >= 360) h -= 360;
-    if (s < 0) s = 0;
-    if (s > 1) s = 1;
-    if (v < 0) v = 0;
-    if (v > 1) v = 1;
+// h: 0..359, s: 0..255, v: 0..255 (целочисленная версия)
+uint32_t graphics_hsv_to_rgb(uint32_t h, uint32_t s, uint32_t v) {
+    h %= 360;
+    if (s > 255) s = 255;
+    if (v > 255) v = 255;
 
-    float c = v * s;
+    uint32_t region = h / 60;            // 0..5
+    uint32_t rem = (h % 60) * 255 / 60;  // 0..255 внутри сектора
 
-    // Manual fmod and fabs for freestanding environment
-    float h_prime = h / 60.0f;
-    int32_t h_prime_int = (int32_t)h_prime;
-    float h_prime_frac = h_prime - h_prime_int;
-    float h_mod = h_prime_frac;
-    if (h_mod < 0) h_mod = -h_mod;
-    if (h_mod > 1) h_mod = 2 - h_mod;
+    uint32_t c = (v * s) / 255;          // chroma
+    uint32_t x_up = (c * rem) / 255;     // растущая грань
+    uint32_t x_dn = (c * (255 - rem)) / 255; // убывающая грань
+    uint32_t m = v - c;
 
-    float x = c * (1 - h_mod);
-    float m = v - c;
-
-    float r, g, b;
-
-    if (h < 60) {
-        r = c; g = x; b = 0;
-    } else if (h < 120) {
-        r = x; g = c; b = 0;
-    } else if (h < 180) {
-        r = 0; g = c; b = x;
-    } else if (h < 240) {
-        r = 0; g = x; b = c;
-    } else if (h < 300) {
-        r = x; g = 0; b = c;
-    } else {
-        r = c; g = 0; b = x;
+    uint32_t r, g, b;
+    switch (region) {
+        case 0:  r = c;    g = x_up; b = 0;    break;
+        case 1:  r = x_dn; g = c;    b = 0;    break;
+        case 2:  r = 0;    g = c;    b = x_up; break;
+        case 3:  r = 0;    g = x_dn; b = c;    break;
+        case 4:  r = x_up; g = 0;    b = c;    break;
+        default: r = c;    g = 0;    b = x_dn; break;
     }
 
-    uint8_t r_byte = (uint8_t)((r + m) * 255);
-    uint8_t g_byte = (uint8_t)((g + m) * 255);
-    uint8_t b_byte = (uint8_t)((b + m) * 255);
-
-    return graphics_rgb_to_color(r_byte, g_byte, b_byte);
+    return graphics_rgb_to_color((uint8_t)(r + m), (uint8_t)(g + m), (uint8_t)(b + m));
 }

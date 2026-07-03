@@ -18,3 +18,6 @@ utils/iso_root/
 # Windows
 ehthumbs.db
 Thumbs.db
+
+# Rust build artifacts
+kernel/rust/target/

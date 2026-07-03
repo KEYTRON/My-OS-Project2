@@ -17,25 +17,8 @@ static void str_ncpy(char *dst, const char *src, uint32_t n) {
     if (n > 0) *dst = '\0';
 }
 
-/* Simple memory allocation stub - for now use stack or globals */
-void *kmalloc(uint32_t size) {
-    /* TODO: Implement proper kernel malloc */
-    static uint8_t heap[65536];
-    static uint32_t heap_pos = 0;
-
-    if (heap_pos + size > sizeof(heap)) {
-        return NULL;
-    }
-
-    void *ptr = &heap[heap_pos];
-    heap_pos += size;
-    return ptr;
-}
-
-void kfree(void *ptr) {
-    /* TODO: Implement proper kernel free */
-    (void)ptr;
-}
+/* Память выделяется настоящей кучей ядра (C++ аллокатор в lib/cxx) */
+#include "../cxx/kheap.h"
 
 /* Global GUI state */
 static struct {

@@ -80,12 +80,12 @@ void graphics_draw_text_shadow(uint32_t x, uint32_t y, const char *text,
 // ========================================
 
 // Interpolate between two colors
-uint32_t graphics_interpolate_color(uint32_t color1, uint32_t color2, float factor);
+uint32_t graphics_interpolate_color(uint32_t color1, uint32_t color2, uint32_t factor);
 
 // Get brightness of color (0.0 - 1.0)
-float graphics_get_color_brightness(uint32_t color);
+uint8_t graphics_get_color_brightness(uint32_t color);
 
 // Create color from HSV
-uint32_t graphics_hsv_to_rgb(float h, float s, float v);
+uint32_t graphics_hsv_to_rgb(uint32_t h, uint32_t s, uint32_t v);
 
 #endif // GRAPHICS_PRIMITIVES_H

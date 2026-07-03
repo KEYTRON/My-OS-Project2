@@ -1,4 +1,4 @@
-// printf.h — упрощённый printf (без float, без сложных спецификаторов)
+// printf.h — упрощённый printf (без float, без сложных спецификаторов)
 #ifndef PRINTF_H
 #define PRINTF_H
 
@@ -6,5 +6,8 @@
 #include <stddef.h>
 
 void printf(const char* format, ...);
+
+// Посимвольный вывод на консоль (VGA + serial)
+void kputchar(char c);
 
 #endif // PRINTF_H

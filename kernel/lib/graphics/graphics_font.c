@@ -104,6 +104,7 @@ static const uint8_t simple_font_data[95][8] = {
     {0xC0, 0x60, 0x30, 0x18, 0x0C, 0x06, 0x03, 0x00}, // \ (92)
     {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, // ] (93)
     {0x18, 0x3C, 0x66, 0x00, 0x00, 0x00, 0x00, 0x00}, // ^ (94)
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7E}, // _ (95)
 };
 
 // Default font structure
@@ -123,6 +124,14 @@ static void _init_font(void) {
     for (int i = 0; i < 95; i++) {
         for (int j = 0; j < 8; j++) {
             graphics_default_font.chars[i + 32].bitmap[j] = simple_font_data[i][j];
+        }
+    }
+
+    // Строчных глифов в таблице нет — используем заглавные (a..z ← A..Z)
+    for (int c = 'a'; c <= 'z'; c++) {
+        for (int j = 0; j < 8; j++) {
+            graphics_default_font.chars[c].bitmap[j] =
+                graphics_default_font.chars[c - 32].bitmap[j];
         }
     }
 }

@@ -1,9 +1,14 @@
 #!/bin/bash
 # build_iso.sh — собирает ISO-образ под BIOS (не UEFI)
+set -e
+
+# Работаем относительно расположения скрипта, чтобы его можно было
+# запускать из любого каталога (в т.ч. из корня репозитория в CI)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 1) Собираем ядро для x86_64
 echo "Сборка ядра x86_64..."
-cd ../kernel
+cd "$SCRIPT_DIR/../kernel"
 make clean ARCH=x86_64
 make ARCH=x86_64
 if [ $? -ne 0 ]; then
